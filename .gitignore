@@ -83,3 +83,9 @@ CMakeLists.txt.user*
 /build*/
 /.qtcreator/
 !tests/
+
+# Python build
+venv/
+
+# images which may be private IP
+tests/images/
