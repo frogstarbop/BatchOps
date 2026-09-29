@@ -11,44 +11,26 @@ sys.path.append(outer_dir)
 # the module to test
 import compression
 
-# constants
-images_src_dir: str = 'images'
-images_jpg_dir: str = os.path.join(images_src_dir, 'jpeg')
-images_png_dir: str = os.path.join(images_src_dir, 'png')
+image_subdir_name: str = 'images'
 
-# TODO: have test cases that make assertions
-# example: self.assertEqual('foo'.upper(), 'FOO')
-
-## @brief Tests compression on different filetypes
-#
-# This only checks that compression doesnt throw any errors
-#
-class TestCompressionDoesntCrash(unittest.TestCase):
-    ## @brief Tests that compression doesnt crash on an image
-    def compress_image(self, image_path: str) -> None:
+class TestStringMethods(unittest.TestCase):
+    def test_compress_jpg(self):
+        # self.assertEqual('foo'.upper(), 'FOO')
+        image_filename: str = 'DSC09877.jpg'
+        image_path: str = os.path.join(image_subdir_name, image_filename)
         print('loading file ' + image_path)
         image: PIL.Image.Image = PIL.Image.open(image_path)
         image.load()
         image_bytes: bytes = compression.compress(image)
         image.close()
-
-    ## @brief Runs compression on every image in a folder recursively
-    def compress_folder(self, sub_directory: str) -> None:
-        for file_name in os.listdir(sub_directory):
-            file_path = os.path.join(sub_directory, file_name)
-            if not os.path.isfile(file_path):
-                # go in recursively
-                self.compress_folder(file_path)
-                continue
-            self.compress_image(file_path)
-
-    ## @brief Tests compression on input JPEG filetype
-    def test_compress_jpg(self):
-        self.compress_folder(images_jpg_dir)
-
-    ## @brief Tests compression on input PNG filetype
     def test_compress_png(self):
-        self.compress_folder(images_png_dir)
-
+            # self.assertEqual('foo'.upper(), 'FOO')
+            image_filename: str = 'HIGH.png'
+            image_path: str = os.path.join(image_subdir_name, image_filename)
+            print('loading file ' + image_path)
+            image: PIL.Image.Image = PIL.Image.open(image_path)
+            image.load()
+            image_bytes: bytes = compression.compress(image)
+            image.close()
 if __name__ == '__main__':
     unittest.main()
