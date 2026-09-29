@@ -11,7 +11,10 @@ sys.path.append(outer_dir)
 # the module to test
 import compression
 
-image_subdir_name: str = 'images'
+# constants
+images_src_dir: str = 'images'
+images_jpg_dir: str = os.path.join(images_src_dir, 'jpeg')
+images_png_dir: str = os.path.join(images_src_dir, 'png')
 
 # settings presets to test with
 high_res_preset = compression.CompressionSettings(
