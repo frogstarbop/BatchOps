@@ -29,7 +29,7 @@ class TestCompressionDoesntCrash(unittest.TestCase):
         print('loading file ' + image_path)
         image: PIL.Image.Image = PIL.Image.open(image_path)
         image.load()
-        image_bytes: bytes = compression.compress(image)
+        image_bytes: bytes = compression.process(image)
         image.close()
 
     ## @brief Runs compression on every image in a folder recursively

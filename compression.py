@@ -10,7 +10,7 @@ import os
 # image
 #
 # @returns A byte array containing the data of the compressed JPEG
-def compress(image: PIL.Image.Image) -> bytes:
+def process(image: PIL.Image.Image) -> bytes:
     # create an in-memory byte buffer than can be written to and read from
     virtual_file: io.BytesIO = io.BytesIO()
 
