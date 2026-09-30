@@ -46,6 +46,9 @@ presets = [high_res_preset, med_res_preset, low_res_preset]
 #
 class TestCompressionDoesntCrash(unittest.TestCase):
     ## @brief Runs compression on an image and cleans up its used resources
+    # @param self This test object
+    # @param image_path The path of the image file to compress
+    # @param settings The settings to apply when compressing
     def compress_image(self,
                        image_path: str,
                        settings: compression.CompressionSettings
@@ -57,6 +60,9 @@ class TestCompressionDoesntCrash(unittest.TestCase):
         image.close()
 
     ## @brief Runs compression on every image in a folder recursively
+    # @param self This test object
+    # @param sub_directory The path containing the image files
+    # @param settings The settings to apply when compressing
     def compress_folder(self,
                         sub_directory: str,
                         settings: compression.CompressionSettings
@@ -70,11 +76,13 @@ class TestCompressionDoesntCrash(unittest.TestCase):
             self.compress_image(file_path, settings)
 
     ## @brief Tests compression on input JPEG filetype
+    # @param self This test object
     def test_compress_jpg(self):
         for preset in presets:
             self.compress_folder(images_jpg_dir, preset)
 
     ## @brief Tests compression on input PNG filetype
+    # @param self This test object
     def test_compress_png(self):
         for preset in presets:
             self.compress_folder(images_png_dir, preset)
