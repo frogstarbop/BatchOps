@@ -38,19 +38,65 @@ class Widget(QWidget):
         ui_path = os.path.join(os.path.dirname(__file__), "form.ui")
         self.ui = loader.load(ui_path, self)
 
+        buttons = []
 
 
-        self.PresetButton = self.findChild(QPushButton, "PresetButton")
+        # Add buttons to program
+        self.button_setup(buttons)
+
+        # Adding checkboxes to program...
 
 
-        if self.PresetButton:
-            self.PresetButton.clicked.connect(self.on_PresetButton_clicked)
-            image_filters = "Images (*.png)"
-        else:
-            print("Error")
+    def button_setup(self, buttons: list[QPushButton]):
+        # Adding buttons to program...
+        self.presetButton = self.findChild(QPushButton, "PresetButton")
+        buttons.append(self.presetButton)
+        self.presetButton.clicked.connect(self.on_presetButton_clicked)
 
-    def on_PresetButton_clicked(self):
+        self.selectFileButton = self.findChild(QPushButton, "selectFileButton")
+        buttons.append(self.selectFileButton)
+        self.selectFileButton.clicked.connect(self.on_selectFileButton_clicked)
+
+        self.presetsBackground = self.findChild(QPushButton, "presetsBackground")
+        buttons.append(self.presetsBackground)
+        self.presetsBackground.clicked.connect(self.on_presetsBackground_clicked)
+
+        self.presetsCrop = self.findChild(QPushButton, "presetsCrop")
+        buttons.append(self.presetsCrop)
+        self.presetsCrop.clicked.connect(self.on_presetsCrop_clicked)
+
+        self.presetsCompress = self.findChild(QPushButton, "presetsCompress")
+        buttons.append(self.presetsCompress)
+        self.presetsCompress.clicked.connect(self.on_presetsCompress_clicked)
+
+        self.presetsAlign = self.findChild(QPushButton, "presetsAlign")
+        buttons.append(self.presetsAlign)
+        self.presetsAlign.clicked.connect(self.on_presetsAlign_clicked)
+
+        self.startButton = self.findChild(QPushButton, "startButton")
+        buttons.append(self.startButton)
+        self.startButton.clicked.connect(self.on_startButton_clicked)
+
+    def on_presetButton_clicked(self):
         print("Preset Button Interaction")
+
+    def on_selectFileButton_clicked(self):
+        print("Select file button interaction")
+
+    def on_presetsBackground_clicked(self):
+        print("presets Background button clicked")
+
+    def on_presetsCrop_clicked(self):
+        print("presets crop clicked")
+
+    def on_presetsCompress_clicked(self):
+        print("presets compress clicked")
+
+    def on_presetsAlign_clicked(self):
+        print("presets align clicked")
+
+    def on_startButton_clicked(self):
+        print("start button clicked")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
