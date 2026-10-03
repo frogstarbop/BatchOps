@@ -24,6 +24,8 @@
 # widget.py
 import sys
 import os
+import configparser
+from edit_presets import Widget as EditPresetsWidget
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFileDialog, QCheckBox
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
@@ -33,7 +35,11 @@ from PySide6.QtCore import Qt
 class Widget(QWidget):
         checkboxes = []
         buttons = []
+        config = configparser.ConfigParser()
+        config_preset_path = "presets.ini"
+
         def __init__(self, parent=None):
+                config_preset_path = "presets.ini"
                 super().__init__(parent)
 
                 # Load the .ui file dynamically at runtime
@@ -41,6 +47,12 @@ class Widget(QWidget):
                 ui_path = os.path.join(os.path.dirname(__file__), "form.ui")
                 self.ui = loader.load(ui_path, self)
 
+                if os.path.exists(self.config_preset_path):
+                        self.config.read(self.config_preset_path)
+                        print("config exists")
+                else:
+                        with open(self.config_preset_path, "w") as configfile:
+                                self.config.write(configfile)
 
                 # Add buttons to program
                 self.button_setup(self.buttons)
@@ -54,6 +66,10 @@ class Widget(QWidget):
                         if checkbox.checkState() == Qt.CheckState.Checked:
                                 return True
                 return False
+
+        def save_current_configuration(self):
+                with open(self.config_preset_path, "w") as configfile:
+                        self.config.write(configfile)
 
 
         # ---------------------- UI Setup Methods --------------------------------------------
@@ -135,7 +151,9 @@ class Widget(QWidget):
 
         ## @brief Defines the interaction for the preset editor button
         def on_presetButton_clicked(self):
-                print("Preset Button Interaction")
+                self.edit_presets_window = EditPresetsWidget(self)
+                self.edit_presets_window.show()
+                self.hide()
 
         ## @brief Defines the interaction for the select file button
         def on_selectFileButton_clicked(self):
