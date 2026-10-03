@@ -18,7 +18,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QSpinBox,
     QVBoxLayout,
-    QHBoxLayout
+    QHBoxLayout,
+    QListWidgetItem
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
@@ -34,7 +35,7 @@ class Widget (QWidget):
 
             self.setup_widgets(preset_name, settings)
 
-            self.set_layout(self.create_layout())
+            self.setLayout(self.create_layout())
 
 
 
@@ -43,22 +44,26 @@ class Widget (QWidget):
 
             self.maxFileSizeLabel = QLabel("max_file_size:")
             self.maxFileSizeSpinBox = QSpinBox()
+            self.maxFileSizeSpinBox.setRange(0, 2147483647) # Max integer
             self.maxFileSizeSpinBox.setValue(settings.max_file_size)
 
             self.preferredWidthsLabel = QLabel("preferred_widths:")
             self.preferredWidthSpinBoxes = []
             for width in settings.preferred_widths:
                 spinBox = QSpinBox()
+                spinBox.setRange(0, 100000)
                 spinBox.setValue(width)
                 self.preferredWidthSpinBoxes.append(spinBox)
 
 
             self.minHeightLabel = QLabel("min_height:")
             self.minHeightSpinBox = QSpinBox()
+            self.minHeightSpinBox.setRange(0,100000)
             self.minHeightSpinBox.setValue(settings.min_height)
 
             self.qualityLabel = QLabel("quality:")
             self.qualitySpinBox = QSpinBox()
+            self.qualitySpinBox.setRange(0,100)
             self.qualitySpinBox.setValue(settings.quality)
 
         def create_layout(self):
@@ -105,6 +110,7 @@ class Widget (QWidget):
         if os.path.exists(self.preset_path):
             self.config.read(self.preset_path)
 
+        self.load_presets()
         self.button_setup()
 
 
@@ -123,9 +129,15 @@ class Widget (QWidget):
     # ------------- Preset saving and loading ----------------------------------------
 
     def load_presets(self):
-        # preset_names = self.config.sections()
-        # self.preset_model.setStringList(preset_names)
-        raise NotImplementedError()
+        for name in self.config.sections():
+            settings = self.get_compression_settings(name)
+            preset_widget = self.PresetWidget(name, settings)
+
+            item = QListWidgetItem()
+            item.setSizeHint(preset_widget.sizeHint())
+
+            self.presetsList.addItem(item)
+            self.presetsList.setItemWidget(item, preset_widget)
 
     def save_presets(self):
         with open(self.preset_path, "w") as configfile:
