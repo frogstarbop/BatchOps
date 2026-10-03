@@ -230,6 +230,19 @@
     <string>Start Processing</string>
    </property>
   </widget>
+  <widget class="QPushButton" name="creditsButton">
+   <property name="geometry">
+    <rect>
+     <x>1020</x>
+     <y>660</y>
+     <width>171</width>
+     <height>91</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Credits</string>
+   </property>
+  </widget>
  </widget>
  <resources/>
  <connections/>
