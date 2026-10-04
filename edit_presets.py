@@ -461,7 +461,22 @@ class PresetWidget (QWidget):
                 # get the corresponding generated widget
                 editor = self.setting_widgets[setting_name]
                 # Set the label
-                label = QLabel(f"{setting_name}:")
+                if setting_name == "max_file_size":
+                    label_text = "file_size (KB):"
+
+                elif setting_name == "preferred_widths":
+                    label_text = "preferred_widths (pixels):"
+
+                elif setting_name == "min_height":
+                    label_text = "min_height (pixels):"
+
+                elif setting_name == "quality":
+                    label_text = "quality (%):"
+
+                else:
+                    label_text = f"{setting_name}:"
+
+                label = QLabel(label_text)
 
                 # add the label and the generated widget to the display
                 layout.addWidget(label)
