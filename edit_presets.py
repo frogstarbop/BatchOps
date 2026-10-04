@@ -18,16 +18,17 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QListWidgetItem,
     QDoubleSpinBox,
-    QLineEdit
+    QLineEdit,
+    QInputDialog
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 
 class Widget (QWidget):
-    buttons = []
     def __init__(self, main_window=None, parent=None):
         super().__init__(parent)
+        self.buttons = []
 
         # Set up the parser for the presets file
         self.config = configparser.ConfigParser()
@@ -71,22 +72,33 @@ class Widget (QWidget):
         return compression.CompressionSettings(
             max_file_size = preset.getint("max_file_size"),
             preferred_widths=[
-                int(width) for width in preset["preferred_widths"].split(",")
+                int(width.strip()) for width in preset["preferred_widths"].split(",")
             ],
             min_height = preset.getint("min_height"),
             quality = preset.getint("quality")
         )
 
+    def get_settings(self, preset_name):
+        preset = self.config[preset_name]
+        preset_type = preset.get("type")
+
+        if preset_type == "compression":
+            return self.get_compression_settings(preset_name)
+        else:
+            raise notImplementedError(
+                f"Type {preset_type} is not currently supported"
+            )
     # ------------- Preset saving and loading ----------------------------------------
 
     # TODO: adjust this so that it is generic (doesn't just respond to CompressionSettings objects)
     ## @brief loads the presets into the listwidget
     def load_presets(self):
+        self.presetsList.clear()
         # For each preset in the config file
         for name in self.config.sections():
             
-            # Get the corresponding CompressionSettings object for this preset
-            settings = self.get_compression_settings(name)
+            # Get the corresponding settings object for this preset
+            settings = self.get_settings(name)
             # Create a PresetWidget from this preset
             preset_widget = PresetWidget(name, settings)
 
@@ -103,7 +115,12 @@ class Widget (QWidget):
             self.config.write(configfile)
 
     def update_config_from_settings(self, preset_name, settings):
+        preset_type = self.config[preset_name].get("type")
+        
         self.config[preset_name] = {}
+
+        if preset_type is not None:
+            self.config[preset_name]["type"] = preset_type
 
         for field in fields(settings):
             setting_name = field.name
@@ -160,12 +177,47 @@ class Widget (QWidget):
     # TODO: implement add preset
     ## @brief adds a preset to the listwidget 
     def on_addPresetButton_clicked(self):
-        print("add preset button clicked")
+        name, accepted = QInputDialog.getText(
+            self,
+            "Add Preset",
+            "Preset name: "
+        )
+
+        if not accepted:
+            return
+        
+        name = name.strip()
+
+        if not name:
+            return
+        
+        if name in self.config:
+            print("preset already exists")
+            return
+        
+        settings = compression
 
     # TODO: implement remove preset
     ## @brief removes a preset from the listwidget
     def on_removePresetButton_clicked(self):
-        print("remove preset button clicked")
+        item = self.presetsList.currentItem()
+
+        if item is None:
+            print("no preset is selected")
+            return
+        
+        preset_widget = self.presetsList.itemWidget(item)
+
+        preset_name = preset_widget.preset_name
+
+        self.config.remove_section(preset_name)
+
+        row = self.presetsList.row(item)
+
+        self.presetsList.takeItem(row)
+        self.save_presets()
+
+        print(f"DEBUG: Removed Preset: {preset_name}")
 
     # TODO: implement save preset
     ## @brief saves the current listwidget configuration state to the preset configuration file
@@ -338,11 +390,11 @@ class PresetWidget (QWidget):
                 elif isinstance(original_value, list):
                     values[setting_name] = [
                         child.value()
-                        for child in child.editors
+                        for child in editor.editors
                     ]
                 else:
                     raise TypeError(f"Unsupported preset setting type: {type(original_value).__name__}")
-                return type(self.settings)(**values)
+            return type(self.settings)(**values)
 
 ## @brief Custom SpinBox class so that the values can't be changed with scrolling
 class NoScrollSpinBox(QSpinBox):
