@@ -1,13 +1,10 @@
 # This Python file uses the following encoding: utf-8
 
-# if __name__ == "__main__":
-#     pass
-
-
 import sys
 import os
 import configparser
 import compression
+from dataclasses import fields
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
@@ -19,7 +16,9 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QVBoxLayout,
     QHBoxLayout,
-    QListWidgetItem
+    QListWidgetItem,
+    QDoubleSpinBox,
+    QLineEdit
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
@@ -33,60 +32,96 @@ class Widget (QWidget):
             self.preset_name = preset_name
             self.settings = settings
 
+            self.setting_widgets = {}
+
+            # Figure out what widgets need to be inside the list
             self.setup_widgets(preset_name, settings)
 
+            # Lay them out in the list widget
             self.setLayout(self.create_layout())
 
 
-
+        ##
         def setup_widgets(self, preset_name, settings):
+
             self.nameLabel = QLabel(preset_name)
-
-            self.maxFileSizeLabel = QLabel("max_file_size:")
-            self.maxFileSizeSpinBox = QSpinBox()
-            self.maxFileSizeSpinBox.setRange(0, 2147483647) # Max integer
-            self.maxFileSizeSpinBox.setValue(settings.max_file_size)
-
-            self.preferredWidthsLabel = QLabel("preferred_widths:")
-            self.preferredWidthSpinBoxes = []
-            for width in settings.preferred_widths:
-                spinBox = QSpinBox()
-                spinBox.setRange(0, 100000)
-                spinBox.setValue(width)
-                self.preferredWidthSpinBoxes.append(spinBox)
+            font = self.nameLabel.font()
+            font.setPointSize(20)
+            font.setBold(True)
+            self.nameLabel.setFont(font)
 
 
-            self.minHeightLabel = QLabel("min_height:")
-            self.minHeightSpinBox = QSpinBox()
-            self.minHeightSpinBox.setRange(0,100000)
-            self.minHeightSpinBox.setValue(settings.min_height)
+            for field in fields(self.settings):
+                setting_name = field.name
+                value = getattr(self.settings, setting_name)
+                editor = self.create_setting_widget(value)
+                self.setting_widgets[setting_name] = editor
 
-            self.qualityLabel = QLabel("quality:")
-            self.qualitySpinBox = QSpinBox()
-            self.qualitySpinBox.setRange(0,100)
-            self.qualitySpinBox.setValue(settings.quality)
+        def create_setting_widget(self, value):
+            if isinstance(value, bool):
+                widget = QCheckBox()
+                widget.setChecked(value)
+                return widget
+
+            if isinstance(value, int):
+                widget = NoScrollSpinBox()
+
+                widget.setRange(0, 2147483647)
+                widget.setValue(value)
+                return widget
+
+            if isinstance(value, float):
+                widget = NoScrollDoubleSpinBox()
+
+                widget.setRange(-2147483647, 2147483647)
+                widget.setValue(value)
+                return widget
+
+            if isinstance(value, str):
+                widget = QLineEdit()
+                widget.setText(value)
+                return widget
+
+            if isinstance(value, list):
+                return self.create_list_widget(value)
+
+            raise TypeError(f"Unsupported preset setting type: {type(value).__name__}")
+
+        def create_list_widget(self, values):
+            widget = QWidget()
+            layout = QVBoxLayout(widget)
+
+            editors = []
+
+            for value in values:
+                if isinstance(value, int):
+                    editor = NoScrollSpinBox()
+                    editor.setRange(0, 2147483647)
+
+                    editor.setValue(value)
+
+                    layout.addWidget(editor)
+
+                    editors.append(editor)
+                else:
+                    raise TypeError(f"Unsupported list value type: {type(value).__name__}")
+            widget.editors = editors
+            return widget
 
         def create_layout(self):
             layout = QVBoxLayout()
 
             layout.addWidget(self.nameLabel)
 
-            layout.addWidget(self.maxFileSizeLabel)
-            layout.addWidget(self.maxFileSizeSpinBox)
+            for field in fields(self.settings):
+                setting_name = field.name
+                editor = self.setting_widgets[setting_name]
+                label = QLabel(f"{setting_name}:")
 
-            layout.addWidget(self.preferredWidthsLabel)
-
-            for spinBox in self.preferredWidthSpinBoxes:
-                layout.addWidget(spinBox)
-
-            layout.addWidget(self.minHeightLabel)
-            layout.addWidget(self.minHeightSpinBox)
-
-            layout.addWidget(self.qualityLabel)
-            layout.addWidget(self.qualitySpinBox)
+                layout.addWidget(label)
+                layout.addWidget(editor)
 
             return layout
-
 
     buttons = []
     def __init__(self, main_window=None, parent=None):
@@ -100,6 +135,9 @@ class Widget (QWidget):
 
 
         self.presetsList = self.findChild(QListWidget, "presetsList")
+        self.presetsList.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
+        self.presetsList.verticalScrollBar().setSingleStep(10)
+
 
         self.preset_path = os.path.join(
             os.path.dirname(__file__),
@@ -152,6 +190,18 @@ class Widget (QWidget):
         self.buttons.append(self.menuButton)
         self.menuButton.clicked.connect(self.on_menuButton_clicked)
 
+        self.addPresetButton = self.findChild(QPushButton, "addPresetButton")
+        self.buttons.append(self.addPresetButton)
+        self.addPresetButton.clicked.connect(self.on_addPresetButton_clicked)
+
+        self.removePresetButton = self.findChild(QPushButton, "removePresetButton")
+        self.buttons.append(self.removePresetButton)
+        self.removePresetButton.clicked.connect(self.on_removePresetButton_clicked)
+
+        self.savePresetButton = self.findChild(QPushButton, "savePresetButton")
+        self.buttons.append(self.savePresetButton)
+        self.savePresetButton.clicked.connect(self.on_savePresetButton_clicked)
+
     # ---------------------- End UI Setup Methods ----------------------------------------
 
 
@@ -161,6 +211,15 @@ class Widget (QWidget):
         print(self.main_window)
         self.close()
         self.main_window.show()
+
+    def on_addPresetButton_clicked(self):
+        print("add preset button clicked")
+
+    def on_removePresetButton_clicked(self):
+        print("remove preset button clicked")
+
+    def on_savePresetButton_clicked(self):
+        print("save preset button clicked")
 
     # ------------- End Button interaction methods ----------------------------------------
 
@@ -180,3 +239,11 @@ class Widget (QWidget):
 
     # ------------- End Preset List modification methods ----------------------------------
 
+## @brief Custom SpinBox class so that the values can't be changed with scrolling
+class NoScrollSpinBox(QSpinBox):
+    def wheelEvent(self, event):
+        event.ignore()
+
+class NoScrollDoubleSpinBox(QDoubleSpinBox):
+    def wheelEvent(self, event):
+        event.ignore()
