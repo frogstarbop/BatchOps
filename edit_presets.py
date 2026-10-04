@@ -46,6 +46,7 @@ class Widget (QWidget):
         self.presetsList = self.findChild(QListWidget, "presetsList")
         self.presetsList.setVerticalScrollMode(QListWidget.ScrollMode.ScrollPerPixel)
         self.presetsList.verticalScrollBar().setSingleStep(10)
+        self.presetsList.currentItemChanged.connect(self.on_presetsList_itemChanged)
 
         # find the preset config file
         self.preset_path = os.path.join(
@@ -77,7 +78,10 @@ class Widget (QWidget):
             min_height = preset.getint("min_height"),
             quality = preset.getint("quality")
         )
+
+    ## @brief create a default settings object to be a placeholder for a particular preset type
     def create_default_settings(self, preset_type):
+        # Return the corresponding Settings type depending on the preset type
         if preset_type == "compression":
             return compression.CompressionSettings(
                 max_file_size=5000000,
@@ -88,6 +92,7 @@ class Widget (QWidget):
         else:
             raise NotImplementedError(f"Type {preset_type} is not currently supported")
 
+    # @brief generic get settings using more specific functions
     def get_settings(self, preset_name):
         preset = self.config[preset_name]
         preset_type = preset.get("type")
@@ -124,26 +129,34 @@ class Widget (QWidget):
         with open(self.preset_path, "w") as configfile:
             self.config.write(configfile)
 
+    ## @brief given a settings object, update the configuration stored 
     def update_config_from_settings(self, preset_name, settings):
+        # Save the type of preset
         preset_type = self.config[preset_name].get("type")
         
         self.config[preset_name] = {}
 
+        # If the preset has a type, add the type to the config
         if preset_type is not None:
             self.config[preset_name]["type"] = preset_type
 
+        # For every field in the settings object...
         for field in fields(settings):
+            # Get the setting name
             setting_name = field.name
+            # get the value
             value = getattr(settings, setting_name)
 
+            # if the value is a list then format it properly
             if isinstance(value, list):
                 value = ",".join(
                     str(item)
                     for item in value
                 )
             else:
+                #otherwise just take the string of it
                 value = str(value)
-            
+            # add the formatted value to the correct field
             self.config[preset_name][setting_name] = value
 
     # ------------- end preset saving and loading interaction methods ---------------------------------------
@@ -176,7 +189,7 @@ class Widget (QWidget):
     # ---------------------- End UI Setup Methods ----------------------------------------
 
 
-    # ------------- Button interaction methods -------------------------------------------
+    # ------------- UI interaction methods -------------------------------------------
 
     ## @brief sets up the interaction for the main menu button: closes this window and opens the main menu
     def on_menuButton_clicked(self):
@@ -184,9 +197,9 @@ class Widget (QWidget):
         self.close()
         self.main_window.show()
 
-    # TODO: implement add preset
     ## @brief adds a preset to the listwidget 
     def on_addPresetButton_clicked(self):
+        # Get the user to choose the type of preset they are creating
         preset_type, accepted = QInputDialog.getItem(
             self,
             "Add Preset",
@@ -196,93 +209,130 @@ class Widget (QWidget):
             False
         )
 
+        # If the user hasn't completed the dialog then don't continue the function
         if not accepted:
             return
         
+        # Get the user to enter a name for the preset
         name, accepted = QInputDialog.getText(
             self,
             "Add Preset",
             "Preset name: "
         )
-
+        
+        # If the user hasn't completed the dialog then don't continue the function
         if not accepted:
             return
         
-
+        # Strip whitespace, if theres nothing left after the strip then the user has entered only whitespace, so return
         name = name.strip()
-
         if not name:
             return
         
+        # If the preset already exists, then do not add it again
         if name in self.config:
             print("preset already exists")
             return
         
+        # Create a default settings object for the preset type
         settings = self.create_default_settings(preset_type)
 
+        # add the preset type to the config (as this won't be displayed)
         self.config[name] = {
             "type":preset_type
         }
 
+        #for each field in the settings object...
         for field in fields(settings):
+            # Set name to the correct name
             setting_name = field.name
+            # Get the value from settings
             value = getattr(settings, setting_name)
 
+            # if the value is a list then format it correctly
             if isinstance(value, list):
                 value = ",".join(
                     str(item)
                     for item in value
                 )
             else:
+                # else just take it as a string
                 value = str(value)
-            
+            # Apply the formatted value to the config
             self.config[name][setting_name] = value
+
+        # Save the presets to the config file
         self.save_presets()
+        # Load the presets into the list
         self.load_presets()
         print(f"DEBUG: Added preset: {name}")
 
-    # TODO: implement remove preset
     ## @brief removes a preset from the listwidget
     def on_removePresetButton_clicked(self):
+        # Get the selected item
         item = self.presetsList.currentItem()
 
+        # If there is no selected item selected then return
+        # (this should no longer ever happen since the button is disabled until you select something, but you never know)
         if item is None:
             print("no preset is selected")
             return
         
+        # get the widget of the selected item
         preset_widget = self.presetsList.itemWidget(item)
 
+        # Get the name of the selected item
         preset_name = preset_widget.preset_name
 
+        # Remove the selected item from the config
         self.config.remove_section(preset_name)
 
+        # get the row of the presets List that the item is on
         row = self.presetsList.row(item)
 
+        # Remove the row from the list
         self.presetsList.takeItem(row)
+
+        # Save the modified presets list to the file
         self.save_presets()
 
         print(f"DEBUG: Removed Preset: {preset_name}")
 
-    # TODO: implement save preset
     ## @brief saves the current listwidget configuration state to the preset configuration file
     def on_savePresetButton_clicked(self):
+
+        # For each index in the presets list
         for index in range(self.presetsList.count()):
+
+            # get the item at that index
             item = self.presetsList.item(index)
 
+            # get the widget of the item
             preset_widget = self.presetsList.itemWidget(item)
 
+            # Get the corresponding settings object of the widget
             settings = preset_widget.get_settings()
 
+            # Update the config using the settings object of the widget
             self.update_config_from_settings(
                 preset_widget.preset_name,
                 settings
             )
 
+        # Update the config file itself
         self.save_presets()
 
         print("DEBUG: Presets saved")
 
-    # ------------- End Button interaction methods ----------------------------------------
+    ## @brief when an item is selected, set the remove button to true
+    def on_presetsList_itemChanged(self, current, previous):
+        if current is not None:
+            self.removePresetButton.setEnabled(True)
+        # Based on my testing this is impossible to reach, but there may be an edge case
+        else:
+            self.removePresetButton.setEnabled(False)
+
+    # ------------- End UI interaction methods ----------------------------------------
 
     # ------------- Preset List modification methods --------------------------------------
 
@@ -296,7 +346,10 @@ class Widget (QWidget):
             "min_height": str(settings.min_height),
             "quality": str(settings.quality)
         }
+
+        # Save the preset list to the config file
         self.save_presets()
+        # reload the presets into the listwidget
         self.load_presets()
 
     # ------------- End Preset List modification methods ----------------------------------
@@ -419,25 +472,33 @@ class PresetWidget (QWidget):
         def get_settings(self):
             values = {}
 
+            # For each value in the settings object
             for field in fields(self.settings):
+                # Get the name
                 setting_name = field.name
+                # Get the widgets for the setting
                 editor = self.setting_widgets[setting_name]
 
+                # Get the original value
                 original_value = getattr(self.settings, setting_name)
 
+                # format the value appropriately depending on the type of the original value...
                 if isinstance(original_value, bool):
                     values[setting_name] = editor.isChecked()
                 elif isinstance(original_value, int) or isinstance(original_value, float):
                     values[setting_name] = editor.value()
                 elif isinstance(original_value, str):
                     values[setting_name] = editor.text()
+                # if the value is a list get all of the elements of the list
                 elif isinstance(original_value, list):
                     values[setting_name] = [
                         child.value()
                         for child in editor.editors
                     ]
+                # Otherwise I haven't implemented the type yet
                 else:
                     raise TypeError(f"Unsupported preset setting type: {type(original_value).__name__}")
+            # return the correct type of settings object
             return type(self.settings)(**values)
 
 ## @brief Custom SpinBox class so that the values can't be changed with scrolling
