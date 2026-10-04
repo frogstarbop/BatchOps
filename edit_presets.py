@@ -102,6 +102,23 @@ class Widget (QWidget):
         with open(self.preset_path, "w") as configfile:
             self.config.write(configfile)
 
+    def update_config_from_settings(self, preset_name, settings):
+        self.config[preset_name] = {}
+
+        for field in fields(settings):
+            setting_name = field.name
+            value = getattr(settings, setting_name)
+
+            if isinstance(value, list):
+                value = ",".join(
+                    str(item)
+                    for item in value
+                )
+            else:
+                value = str(value)
+            
+            self.config[preset_name][setting_name] = value
+
     # ------------- end preset saving and loading interaction methods ---------------------------------------
 
     # ---------------------- UI Setup Methods --------------------------------------------
@@ -153,7 +170,21 @@ class Widget (QWidget):
     # TODO: implement save preset
     ## @brief saves the current listwidget configuration state to the preset configuration file
     def on_savePresetButton_clicked(self):
-        print("save preset button clicked")
+        for index in range(self.presetsList.count()):
+            item = self.presetsList.item(index)
+
+            preset_widget = self.presetsList.itemWidget(item)
+
+            settings = preset_widget.get_settings()
+
+            self.update_config_from_settings(
+                preset_widget.preset_name,
+                settings
+            )
+
+        self.save_presets()
+
+        print("DEBUG: Presets saved")
 
     # ------------- End Button interaction methods ----------------------------------------
 
@@ -288,6 +319,30 @@ class PresetWidget (QWidget):
                 layout.addWidget(editor)
 
             return layout
+        ## @brief converts the edited Qt Controls back into dataclasses
+        def get_settings(self):
+            values = {}
+
+            for field in fields(self.settings):
+                setting_name = field.name
+                editor = self.setting_widgets[setting_name]
+
+                original_value = getattr(self.settings, setting_name)
+
+                if isinstance(original_value, bool):
+                    values[setting_name] = editor.isChecked()
+                elif isinstance(original_value, int) or isinstance(original_value, float):
+                    values[setting_name] = editor.value()
+                elif isinstance(original_value, str):
+                    values[setting_name] = editor.text()
+                elif isinstance(original_value, list):
+                    values[setting_name] = [
+                        child.value()
+                        for child in child.editors
+                    ]
+                else:
+                    raise TypeError(f"Unsupported preset setting type: {type(original_value).__name__}")
+                return type(self.settings)(**values)
 
 ## @brief Custom SpinBox class so that the values can't be changed with scrolling
 class NoScrollSpinBox(QSpinBox):
