@@ -26,7 +26,16 @@ import sys
 import os
 import configparser
 from edit_presets import Widget as EditPresetsWidget
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFileDialog, QCheckBox
+from PySide6.QtWidgets import (
+        QApplication, 
+        QWidget, 
+        QPushButton, 
+        QFileDialog, 
+        QCheckBox, 
+        QInputDialog,
+        QScrollArea,
+        QSizePolicy
+)
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
@@ -41,7 +50,12 @@ class Widget(QWidget):
         def __init__(self, parent=None):
                 config_preset_path = "presets.ini"
                 super().__init__(parent)
-
+                self.selected_presets = {
+                        "background": None,
+                        "crop": None,
+                        "compression": None,
+                        "alignment": None
+                }
                 # Load the .ui file dynamically at runtime
                 loader = QUiLoader()
                 ui_path = os.path.join(os.path.dirname(__file__), "form.ui")
@@ -53,12 +67,14 @@ class Widget(QWidget):
                 else:
                         with open(self.config_preset_path, "w") as configfile:
                                 self.config.write(configfile)
-
+                self.scrollArea = self.findChild(QScrollArea, "scrollArea")
                 # Add buttons to program
                 self.button_setup(self.buttons)
 
                 # Adding checkboxes to program...
                 self.checkbox_setup(self.checkboxes)
+
+                self.update_preset_area_width()
 
 
         def check_any_checkbox_states(self):
@@ -161,19 +177,19 @@ class Widget(QWidget):
 
         ## @brief Defines the interaction for the background preset button
         def on_presetsBackground_clicked(self):
-                print("presets Background button clicked")
+                self.select_preset("background", self.presetsBackground)
 
         ## @brief Defines the interaction for the crop preset button
         def on_presetsCrop_clicked(self):
-                print("presets crop clicked")
+                self.select_preset("crop", self.presetsCrop)
 
         ## @brief Defines the interaction for the compress preset button
         def on_presetsCompress_clicked(self):
-                print("presets compress clicked")
+                self.select_preset("compression", self.presetsCompress)
 
         ## @brief Defines the interaction for the align preset button
         def on_presetsAlign_clicked(self):
-                print("presets align clicked")
+                self.select_preset("alignment", self.presetsAlign)
 
         ## @brief Defines the interaction for the start button
         def on_startButton_clicked(self):
@@ -221,6 +237,62 @@ class Widget(QWidget):
                         self.startButton.setEnabled(False)
 
         # ------------- End Checkbox interaction methods ----------------------------------------
+        
+        def select_preset(self, preset_type, button):
+
+                preset_names = [
+                        name
+                        for name in self.config.sections()
+                        if self.config[name].get("type") == preset_type
+                ]
+
+                preset_names.insert(0, "None")
+
+                if not preset_names:
+                        print(f"No {preset_type} presets available")
+                        return
+                
+                preset_name, accepted = QInputDialog.getItem(
+                        self,
+                        "Select Preset",
+                        "Preset:",
+                        preset_names,
+                        0,
+                        False
+                )
+
+                if not accepted:
+                        return
+                if preset_name == "None":
+                        self.selected_presets[preset_type] = None
+                        button.setText("Current Preset: None")
+                else:
+                        self.selected_presets[preset_type] = preset_name
+                        button.setText(f"Current Preset: {preset_name}")
+
+                self.update_preset_area_width()
+                print(f"selected {preset_type} preset: {preset_name}")
+
+        def update_preset_area_width(self):
+            buttons = [
+                self.presetsBackground,
+                self.presetsCrop,
+                self.presetsCompress,
+                self.presetsAlign
+            ]
+
+            required_width = 201
+
+            for button in buttons:
+                required_width = max(
+                    required_width,
+                    button.sizeHint().width() + 20
+                )
+
+            self.scrollArea.setMinimumWidth(required_width)
+            size_policy = self.scrollArea.sizePolicy()
+            size_policy.setHorizontalPolicy(QSizePolicy.Policy.Preferred)
+            self.scrollArea.setSizePolicy(size_policy)
 
 
 if __name__ == "__main__":
