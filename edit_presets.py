@@ -77,6 +77,16 @@ class Widget (QWidget):
             min_height = preset.getint("min_height"),
             quality = preset.getint("quality")
         )
+    def create_default_settings(self, preset_type):
+        if preset_type == "compression":
+            return compression.CompressionSettings(
+                max_file_size=5000000,
+                preferred_widths=[3840,2560,1920],
+                min_height=1080,
+                quality=90
+            )
+        else:
+            raise NotImplementedError(f"Type {preset_type} is not currently supported")
 
     def get_settings(self, preset_name):
         preset = self.config[preset_name]
@@ -177,6 +187,18 @@ class Widget (QWidget):
     # TODO: implement add preset
     ## @brief adds a preset to the listwidget 
     def on_addPresetButton_clicked(self):
+        preset_type, accepted = QInputDialog.getItem(
+            self,
+            "Add Preset",
+            "Preset type: ",
+            ["compression"],
+            0,
+            False
+        )
+
+        if not accepted:
+            return
+        
         name, accepted = QInputDialog.getText(
             self,
             "Add Preset",
@@ -186,6 +208,7 @@ class Widget (QWidget):
         if not accepted:
             return
         
+
         name = name.strip()
 
         if not name:
@@ -195,7 +218,28 @@ class Widget (QWidget):
             print("preset already exists")
             return
         
-        settings = compression
+        settings = self.create_default_settings(preset_type)
+
+        self.config[name] = {
+            "type":preset_type
+        }
+
+        for field in fields(settings):
+            setting_name = field.name
+            value = getattr(settings, setting_name)
+
+            if isinstance(value, list):
+                value = ",".join(
+                    str(item)
+                    for item in value
+                )
+            else:
+                value = str(value)
+            
+            self.config[name][setting_name] = value
+        self.save_presets()
+        self.load_presets()
+        print(f"DEBUG: Added preset: {name}")
 
     # TODO: implement remove preset
     ## @brief removes a preset from the listwidget
