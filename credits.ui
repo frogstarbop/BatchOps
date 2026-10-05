@@ -66,6 +66,16 @@
     <string>Main Menu</string>
    </property>
   </widget>
+  <widget class="QTextBrowser" name="textBrowser">
+   <property name="geometry">
+    <rect>
+     <x>100</x>
+     <y>120</y>
+     <width>1001</width>
+     <height>641</height>
+    </rect>
+   </property>
+  </widget>
  </widget>
  <resources/>
  <connections/>
