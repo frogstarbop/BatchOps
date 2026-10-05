@@ -100,7 +100,7 @@ class Widget (QWidget):
         if preset_type == "compression":
             return self.get_compression_settings(preset_name)
         else:
-            raise notImplementedError(
+            raise NotImplementedError(
                 f"Type {preset_type} is not currently supported"
             )
     # ------------- Preset saving and loading ----------------------------------------
