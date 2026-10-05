@@ -90,3 +90,7 @@ v/
 
 # images which may be private IP
 tests/images/
+
+# pyinstaller
+dist/
+widget.spec
