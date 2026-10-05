@@ -27,6 +27,7 @@ import os
 import configparser
 from edit_presets import Widget as EditPresetsWidget
 from credits import Widget as CreditsWidget
+from progress_window import Widget as ProcessingWidget
 from PySide6.QtWidgets import (
         QApplication, 
         QWidget, 
@@ -51,7 +52,7 @@ class Widget(QWidget):
         def __init__(self, parent=None):
                 config_preset_path = "presets.ini"
                 super().__init__(parent)
-
+                self.processing_overlay = None
                 # list of the current selected preset for each function
                 self.selected_presets = {
                         "background": None,
@@ -198,7 +199,11 @@ class Widget(QWidget):
 
         ## @brief Defines the interaction for the start button
         def on_startButton_clicked(self):
-                print("start button clicked")
+                self.processing_overlay = ProcessingWidget(self)
+
+                self.processing_overlay.setGeometry(self.rect())
+                self.processing_overlay.raise_()
+                self.processing_overlay.show()
 
         ## @brief defines the interaction for the credits button
         def on_creditsButton_clicked(self):
@@ -314,6 +319,12 @@ class Widget(QWidget):
                 size_policy = self.scrollArea.sizePolicy()
                 size_policy.setHorizontalPolicy(QSizePolicy.Policy.Preferred)
                 self.scrollArea.setSizePolicy(size_policy)
+        
+        def resizeEvent(self, event):
+                super().resizeEvent(event)
+
+                if self.processing_overlay is not None:
+                        self.processing_overlay.setGeometry(self.rect())
 
 
 if __name__ == "__main__":
