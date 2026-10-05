@@ -50,12 +50,15 @@ class Widget(QWidget):
         def __init__(self, parent=None):
                 config_preset_path = "presets.ini"
                 super().__init__(parent)
+
+                # list of the current selected preset for each function
                 self.selected_presets = {
                         "background": None,
                         "crop": None,
                         "compression": None,
                         "alignment": None
                 }
+
                 # Load the .ui file dynamically at runtime
                 loader = QUiLoader()
                 ui_path = os.path.join(os.path.dirname(__file__), "form.ui")
@@ -76,13 +79,14 @@ class Widget(QWidget):
 
                 self.update_preset_area_width()
 
-
+        ## @brief checks if any checkboxes are selected
         def check_any_checkbox_states(self):
                 for checkbox in self.checkboxes:
                         if checkbox.checkState() == Qt.CheckState.Checked:
                                 return True
                 return False
 
+        ## @brief save the current configuration to the file
         def save_current_configuration(self):
                 with open(self.config_preset_path, "w") as configfile:
                         self.config.write(configfile)
@@ -238,20 +242,26 @@ class Widget(QWidget):
 
         # ------------- End Checkbox interaction methods ----------------------------------------
         
+        ## brief select a preset of a particular type
         def select_preset(self, preset_type, button):
 
+                # Get the list of preset names from the config file
                 preset_names = [
                         name
                         for name in self.config.sections()
                         if self.config[name].get("type") == preset_type
                 ]
 
+                # insert a "None" option into the selection list (to leave room for custom non-preset operations)
                 preset_names.insert(0, "None")
-
+                
+                # If no presets for the type...
+                # In theory this never triggers, as None has been manually inserted
                 if not preset_names:
                         print(f"No {preset_type} presets available")
                         return
                 
+                # Open a selection dialog for the presets
                 preset_name, accepted = QInputDialog.getItem(
                         self,
                         "Select Preset",
@@ -261,38 +271,46 @@ class Widget(QWidget):
                         False
                 )
 
+                # if the user closed the dialog and didn't select an option, then do not continue with the function
                 if not accepted:
                         return
+
+                # If None is selected then set the selected preset to None, update text appropriately
                 if preset_name == "None":
                         self.selected_presets[preset_type] = None
                         button.setText("Current Preset: None")
+                # Else if an option was selected, set the selected preset to the option, update the text appropriately
                 else:
                         self.selected_presets[preset_type] = preset_name
                         button.setText(f"Current Preset: {preset_name}")
 
+                # Update the scrollArea width based on the new button widths
                 self.update_preset_area_width()
                 print(f"selected {preset_type} preset: {preset_name}")
 
+        ## @brief Update the scroll area width depending on the width of the buttons
         def update_preset_area_width(self):
-            buttons = [
+                buttons = [
                 self.presetsBackground,
                 self.presetsCrop,
                 self.presetsCompress,
                 self.presetsAlign
-            ]
+                ]
 
-            required_width = 201
+                required_width = 200
 
-            for button in buttons:
-                required_width = max(
-                    required_width,
-                    button.sizeHint().width() + 20
-                )
-
-            self.scrollArea.setMinimumWidth(required_width)
-            size_policy = self.scrollArea.sizePolicy()
-            size_policy.setHorizontalPolicy(QSizePolicy.Policy.Preferred)
-            self.scrollArea.setSizePolicy(size_policy)
+                # update the required width based on the max width of a button
+                for button in buttons:
+                        required_width = max(
+                                required_width,
+                                button.sizeHint().width() + 20
+                        )
+                
+                # Set the minimum width to the found required width
+                self.scrollArea.setMinimumWidth(required_width)
+                size_policy = self.scrollArea.sizePolicy()
+                size_policy.setHorizontalPolicy(QSizePolicy.Policy.Preferred)
+                self.scrollArea.setSizePolicy(size_policy)
 
 
 if __name__ == "__main__":
