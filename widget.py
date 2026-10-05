@@ -26,6 +26,7 @@ import sys
 import os
 import configparser
 from edit_presets import Widget as EditPresetsWidget
+from credits import Widget as CreditsWidget
 from PySide6.QtWidgets import (
         QApplication, 
         QWidget, 
@@ -201,7 +202,9 @@ class Widget(QWidget):
 
         ## @brief defines the interaction for the credits button
         def on_creditsButton_clicked(self):
-                print("credits button clicked")
+                self.credits_window = CreditsWidget(self)
+                self.credits_window.show()
+                self.hide()
 
         # ------------- End Button interaction methods ----------------------------------------
 
