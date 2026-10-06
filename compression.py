@@ -4,6 +4,9 @@ import os
 
 from dataclasses import dataclass
 
+class CompressionError(Exception):
+    pass
+
 ## @brief A container for all the settings for compressing an image
 @dataclass
 class CompressionSettings:
@@ -71,6 +74,10 @@ def process(image: PIL.Image.Image, settings: CompressionSettings) -> bytes:
     file_size: int = os.path.getsize(filename)
     print(f'original input image filesize is\t{file_size: 10d}')
     original_file_size: int = file_size
+
+    # check if image too short
+    if image.height < settings.min_height:
+        raise CompressionError(f'{filename}: input is {image.height}px tall, min is {settings.min_height}px')
 
     # check if input filesize already under max filesize
     data, file_size = get_image_data(image, settings)
