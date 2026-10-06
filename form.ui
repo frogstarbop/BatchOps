@@ -19,10 +19,10 @@
   <widget class="QPushButton" name="PresetButton">
    <property name="geometry">
     <rect>
-     <x>1010</x>
-     <y>10</y>
-     <width>181</width>
-     <height>41</height>
+     <x>650</x>
+     <y>210</y>
+     <width>160</width>
+     <height>50</height>
     </rect>
    </property>
    <property name="text">
@@ -75,22 +75,25 @@
   <widget class="QPushButton" name="selectFileButton">
    <property name="geometry">
     <rect>
-     <x>40</x>
+     <x>400</x>
      <y>210</y>
-     <width>171</width>
-     <height>81</height>
+     <width>160</width>
+     <height>50</height>
     </rect>
    </property>
    <property name="text">
-    <string>Select Source Folder</string>
+    <string>Select Folder</string>
    </property>
   </widget>
   <widget class="QScrollArea" name="scrollArea">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="geometry">
     <rect>
-     <x>500</x>
-     <y>190</y>
-     <width>201</width>
+     <x>390</x>
+     <y>270</y>
+     <width>431</width>
      <height>331</height>
     </rect>
    </property>
@@ -102,24 +105,31 @@
      <rect>
       <x>0</x>
       <y>0</y>
-      <width>199</width>
+      <width>429</width>
       <height>329</height>
      </rect>
     </property>
     <layout class="QVBoxLayout" name="verticalLayout">
      <item>
-      <widget class="QCheckBox" name="checkBg">
-       <property name="text">
-        <string>Background Removal</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="presetsBackground">
-       <property name="text">
-        <string>Current Preset: None</string>
-       </property>
-      </widget>
+      <layout class="QHBoxLayout" name="layoutBack">
+       <item>
+        <widget class="QCheckBox" name="checkBg">
+         <property name="text">
+          <string>Background Removal</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="presetsBackground">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>Current Preset: None</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </item>
      <item>
       <spacer name="verticalSpacer">
@@ -138,18 +148,25 @@
       </spacer>
      </item>
      <item>
-      <widget class="QCheckBox" name="checkCrop">
-       <property name="text">
-        <string>Crop</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="presetsCrop">
-       <property name="text">
-        <string>Current Preset: None</string>
-       </property>
-      </widget>
+      <layout class="QHBoxLayout" name="layoutCrop">
+       <item>
+        <widget class="QCheckBox" name="checkCrop">
+         <property name="text">
+          <string>Crop</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="presetsCrop">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>Current Preset: None</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </item>
      <item>
       <spacer name="verticalSpacer_2">
@@ -168,18 +185,25 @@
       </spacer>
      </item>
      <item>
-      <widget class="QCheckBox" name="checkCompress">
-       <property name="text">
-        <string>Compress</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="presetsCompress">
-       <property name="text">
-        <string>Current Preset: None</string>
-       </property>
-      </widget>
+      <layout class="QHBoxLayout" name="layoutCompress">
+       <item>
+        <widget class="QCheckBox" name="checkCompress">
+         <property name="text">
+          <string>Compress</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="presetsCompress">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>Current Preset: None</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </item>
      <item>
       <spacer name="verticalSpacer_3">
@@ -198,18 +222,25 @@
       </spacer>
      </item>
      <item>
-      <widget class="QCheckBox" name="checkAlign">
-       <property name="text">
-        <string>Head Alignment</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="presetsAlign">
-       <property name="text">
-        <string>Current Preset: None</string>
-       </property>
-      </widget>
+      <layout class="QHBoxLayout" name="layoutAlign">
+       <item>
+        <widget class="QCheckBox" name="checkAlign">
+         <property name="text">
+          <string>Head Alignment</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="presetsAlign">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>Current Preset: None</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </item>
     </layout>
    </widget>
@@ -220,10 +251,10 @@
    </property>
    <property name="geometry">
     <rect>
-     <x>500</x>
-     <y>530</y>
-     <width>191</width>
-     <height>121</height>
+     <x>520</x>
+     <y>610</y>
+     <width>160</width>
+     <height>50</height>
     </rect>
    </property>
    <property name="text">
@@ -233,11 +264,17 @@
   <widget class="QPushButton" name="creditsButton">
    <property name="geometry">
     <rect>
-     <x>1020</x>
-     <y>660</y>
-     <width>171</width>
-     <height>91</height>
+     <x>1010</x>
+     <y>20</y>
+     <width>190</width>
+     <height>60</height>
     </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>12</pointsize>
+     <italic>true</italic>
+    </font>
    </property>
    <property name="text">
     <string>Credits</string>

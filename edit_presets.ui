@@ -63,7 +63,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>Main Menu</string>
+    <string>Go Back</string>
    </property>
   </widget>
   <widget class="QListWidget" name="presetsList">

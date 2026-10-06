@@ -179,7 +179,8 @@ class Widget(QWidget):
 
         ## @brief Defines the interaction for the select file button
         def on_selectFileButton_clicked(self):
-                print("Select file button interaction")
+                # TODO: Select folder
+                self.scrollArea.setEnabled(True)
 
         ## @brief Defines the interaction for the background preset button
         def on_presetsBackground_clicked(self):
@@ -224,6 +225,11 @@ class Widget(QWidget):
                 else:
                         self.startButton.setEnabled(False)
 
+                if (state == Qt.CheckState.Checked):
+                        self.presetsBackground.setEnabled(True)
+                elif (state == Qt.CheckState.Unchecked):
+                        self.presetsBackground.setEnabled(False)
+
         ## @brief Defines the interaction for the compress checkbox
         def on_checkboxCompress_stateChanged(self, state):
                 print(f"Compress check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
@@ -231,6 +237,11 @@ class Widget(QWidget):
                         self.startButton.setEnabled(True)
                 else:
                         self.startButton.setEnabled(False)
+
+                if (state == Qt.CheckState.Checked):
+                        self.presetsCompress.setEnabled(True)
+                elif (state == Qt.CheckState.Unchecked):
+                        self.presetsCompress.setEnabled(False)
 
         ## @brief Defines the interaction for the crop checkbox
         def on_checkboxCrop_stateChanged(self, state):
@@ -240,6 +251,11 @@ class Widget(QWidget):
                 else:
                         self.startButton.setEnabled(False)
 
+                if (state == Qt.CheckState.Checked):
+                        self.presetsCrop.setEnabled(True)
+                elif (state == Qt.CheckState.Unchecked):
+                        self.presetsCrop.setEnabled(False)
+
         ## @brief Defines the interaction for the align checkbox
         def on_checkboxAlign_stateChanged(self, state):
                 print(f"Align check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
@@ -247,6 +263,11 @@ class Widget(QWidget):
                         self.startButton.setEnabled(True)
                 else:
                         self.startButton.setEnabled(False)
+
+                if (state == Qt.CheckState.Checked):
+                        self.presetsAlign.setEnabled(True)
+                elif (state == Qt.CheckState.Unchecked):
+                        self.presetsAlign.setEnabled(False)
 
         # ------------- End Checkbox interaction methods ----------------------------------------
         
