@@ -120,12 +120,9 @@
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="presetsBackground">
+        <widget class="QComboBox" name="presetsBackground">
          <property name="enabled">
           <bool>false</bool>
-         </property>
-         <property name="text">
-          <string>Current Preset: None</string>
          </property>
         </widget>
        </item>
@@ -157,12 +154,9 @@
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="presetsCrop">
+        <widget class="QComboBox" name="presetsCrop">
          <property name="enabled">
           <bool>false</bool>
-         </property>
-         <property name="text">
-          <string>Current Preset: None</string>
          </property>
         </widget>
        </item>
@@ -194,12 +188,9 @@
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="presetsCompress">
+        <widget class="QComboBox" name="presetsCompress">
          <property name="enabled">
           <bool>false</bool>
-         </property>
-         <property name="text">
-          <string>Current Preset: None</string>
          </property>
         </widget>
        </item>
@@ -231,12 +222,9 @@
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="presetsAlign">
+        <widget class="QComboBox" name="presetsAlign">
          <property name="enabled">
           <bool>false</bool>
-         </property>
-         <property name="text">
-          <string>Current Preset: None</string>
          </property>
         </widget>
        </item>
@@ -278,6 +266,22 @@
    </property>
    <property name="text">
     <string>Credits</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>500</x>
+     <y>80</y>
+     <width>191</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Lets edit some images!</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignmentFlag::AlignCenter</set>
    </property>
   </widget>
  </widget>
