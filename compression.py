@@ -97,10 +97,12 @@ def process(image: PIL.Image.Image, settings: CompressionSettings) -> bytes:
             expected_height: int = round(new_width / aspect_ratio)
 
             # if reducing breaks a rule, fail this image
-            if new_width == -1 or expected_height < settings.min_height:
+            if new_width == -1:
                 max_KB: int = settings.max_file_size//1000
-                raise CompressionError(f'{filename}: could not be compressed to fit under {max_KB}KB')
-
+                raise CompressionError(f'{filename}: could not be compressed to fit under {max_KB}KB, hit preffered width limit')
+            if expected_height < settings.min_height:
+                max_KB: int = settings.max_file_size//1000
+                raise CompressionError(f'{filename}: could not be compressed to fit under {max_KB}KB, hit min height limit')
             # resize image
             new_size = (new_width, expected_height)
             sampling = PIL.Image.Resampling.BICUBIC
