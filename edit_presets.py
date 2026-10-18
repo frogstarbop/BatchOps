@@ -4,6 +4,7 @@ import sys
 import os
 import configparser
 import compression
+import cropping
 from dataclasses import fields
 from PySide6.QtWidgets import (
     QApplication,
@@ -79,6 +80,15 @@ class Widget (QWidget):
             quality = preset.getint("quality")
         )
 
+    def get_cropping_settings(self, preset_name):
+        preset = self.config[preset_name]
+
+        return cropping.CroppingSettings(
+            name = preset_name,
+            width_ratio = preset.getint("width_ratio"),
+            height_ratio = preset.getint("height_ratio")
+        )
+
     ## @brief create a default settings object to be a placeholder for a particular preset type
     def create_default_settings(self, preset_type, name):
         # Return the corresponding Settings type depending on the preset type
@@ -90,6 +100,12 @@ class Widget (QWidget):
                 min_height=1080,
                 quality=90
             )
+        elif preset_type == "crop":
+            return cropping.CroppingSettings(
+                name=name,
+                width_ratio=16,
+                height_ratio=9
+            )
         else:
             raise NotImplementedError(f"Type {preset_type} is not currently supported")
 
@@ -100,6 +116,8 @@ class Widget (QWidget):
 
         if preset_type == "compression":
             return self.get_compression_settings(preset_name)
+        elif preset_type == "crop":
+            return self.get_cropping_settings(preset_name)
         else:
             raise NotImplementedError(
                 f"Type {preset_type} is not currently supported"
@@ -211,7 +229,7 @@ class Widget (QWidget):
             self,
             "Add Preset",
             "Preset type: ",
-            ["compression"],
+            ["compression", "crop"],
             0,
             False
         )
