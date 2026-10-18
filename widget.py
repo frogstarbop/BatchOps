@@ -37,7 +37,8 @@ from PySide6.QtWidgets import (
         QInputDialog,
         QScrollArea,
         QSizePolicy,
-        QComboBox
+        QComboBox,
+        QLabel
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
@@ -128,6 +129,9 @@ class Widget(QWidget):
                 self.populate_preset_combo(self.presetsAlign, "alignment")
                 self.populate_preset_combo(self.presetsCompress, "compression")
                 self.populate_preset_combo(self.presetsCrop, "crop")
+
+                self.creditsLabel = self.findChild(QLabel, "creditsLabel")
+                self.creditsLabel.linkActivated.connect(self.on_creditsLabel_linkActivated)
         
         def populate_preset_combo(self, combo, preset_type):
                 preset_names = [
@@ -137,10 +141,9 @@ class Widget(QWidget):
                 ]
 
                 combo.clear()
-                combo.addItem("None")
+                combo.setPlaceholderText("Select a preset...")
                 combo.addItems(preset_names)
-
-                combo.setCurrentIndex(0)
+                combo.setCurrentIndex(-1)
         ## @brief Connects all buttons in the GUI to their corresponding methods
         #
         # @param buttons The list of buttons on the form
@@ -157,35 +160,10 @@ class Widget(QWidget):
                 buttons.append(self.selectFileButton)
                 self.selectFileButton.clicked.connect(self.on_selectFileButton_clicked)
 
-                # Add background presets button to class
-                # self.presetsBackground = self.findChild(QPushButton, "presetsBackground")
-                # buttons.append(self.presetsBackground)
-                # self.presetsBackground.clicked.connect(self.on_presetsBackground_clicked)
-
-                # # Add crop presets button to class
-                # self.presetsCrop = self.findChild(QPushButton, "presetsCrop")
-                # buttons.append(self.presetsCrop)
-                # self.presetsCrop.clicked.connect(self.on_presetsCrop_clicked)
-
-                # # Add compress presets button to class
-                # self.presetsCompress = self.findChild(QPushButton, "presetsCompress")
-                # buttons.append(self.presetsCompress)
-                # self.presetsCompress.clicked.connect(self.on_presetsCompress_clicked)
-
-                # # Add align presets button to class
-                # self.presetsAlign = self.findChild(QPushButton, "presetsAlign")
-                # buttons.append(self.presetsAlign)
-                # self.presetsAlign.clicked.connect(self.on_presetsAlign_clicked)
-
                 # Add start button to class
                 self.startButton = self.findChild(QPushButton, "startButton")
                 buttons.append(self.startButton)
                 self.startButton.clicked.connect(self.on_startButton_clicked)
-
-                # Add credits button to class
-                self.creditsButton = self.findChild(QPushButton, "creditsButton")
-                buttons.append(self.creditsButton)
-                self.creditsButton.clicked.connect(self.on_creditsButton_clicked)
 
 
         ## @brief Connects all buttons in the GUI to their corresponding methods
@@ -234,12 +212,6 @@ class Widget(QWidget):
                 self.processing_overlay.setGeometry(self.rect())
                 self.processing_overlay.raise_()
                 self.processing_overlay.show()
-
-        ## @brief defines the interaction for the credits button
-        def on_creditsButton_clicked(self):
-                self.credits_window = CreditsWidget(self)
-                self.credits_window.show()
-                self.hide()
 
         # ------------- End Button interaction methods ----------------------------------------
 
@@ -345,6 +317,11 @@ class Widget(QWidget):
                 self.populate_preset_combo(self.presetsAlign, "alignment")
                 self.populate_preset_combo(self.presetsCompress, "compression")
                 self.populate_preset_combo(self.presetsCrop, "crop")
+        
+        def on_creditsLabel_linkActivated(self, link: str):
+                self.credits_window = CreditsWidget(self)
+                self.credits_window.show()
+                self.hide()
                 
 
 

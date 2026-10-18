@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 class Widget (QWidget):
     def __init__(self, main_window=None, parent=None):
@@ -123,6 +123,9 @@ class Widget (QWidget):
             # Add the preset widget to the listwidget
             self.presetsList.addItem(item)
             self.presetsList.setItemWidget(item, preset_widget)
+            preset_widget.expansionChanged.connect(
+                lambda item=item, widget=preset_widget: self.on_preset_expansion_changed(item, widget)
+            )
 
     ## @brief save the presets back into the configfile
     def save_presets(self):
@@ -195,6 +198,7 @@ class Widget (QWidget):
     def on_menuButton_clicked(self):
         print(self.main_window)
         self.close()
+        self.main_window.reload_config()
         self.main_window.show()
 
     ## @brief adds a preset to the listwidget 
@@ -261,8 +265,6 @@ class Widget (QWidget):
             # Apply the formatted value to the config
             self.config[name][setting_name] = value
 
-        # Save the presets to the config file
-        self.save_presets()
         # Load the presets into the list
         self.load_presets()
         print(f"DEBUG: Added preset: {name}")
@@ -292,9 +294,6 @@ class Widget (QWidget):
 
         # Remove the row from the list
         self.presetsList.takeItem(row)
-
-        # Save the modified presets list to the file
-        self.save_presets()
 
         print(f"DEBUG: Removed Preset: {preset_name}")
 
@@ -332,6 +331,9 @@ class Widget (QWidget):
         else:
             self.removePresetButton.setEnabled(False)
 
+    def on_preset_expansion_changed(self, item, preset_widget):
+        item.setSizeHint(preset_widget.sizeHint())
+        self.presetsList.setCurrentItem(item)
     # ------------- End UI interaction methods ----------------------------------------
 
     # ------------- Preset List modification methods --------------------------------------
@@ -355,11 +357,18 @@ class Widget (QWidget):
     # ------------- End Preset List modification methods ----------------------------------
 
 class PresetWidget (QWidget):
+
+        ## emitted whenever the dropdown is opened or closed
+        expansionChanged = Signal()
+
+        DISPLAY_SCALES = {
+            "max_file_size": 1000
+        }
+
         def __init__(self, preset_name, settings, parent=None):
             super().__init__(parent)
             self.preset_name = preset_name
             self.settings = settings
-
             self.setting_widgets = {}
 
             # Figure out what widgets need to be inside the list
@@ -367,22 +376,33 @@ class PresetWidget (QWidget):
 
             # Lay them out in the list widget
             self.setLayout(self.create_layout())
+            self.set_expanded(False)
 
 
         ## @brief figures out which widgets are needed
         def setup_widgets(self, preset_name, settings):
 
             # Set up the name label widget
-            self.nameLabel = QLabel(preset_name)
-            font = self.nameLabel.font()
+            self.headerButton = QPushButton()
+            self.headerButton.setFlat(True)
+            self.headerButton.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.headerButton.setStyleSheet("text-align: left; padding: 6px;")
+            font = self.headerButton.font()
             font.setPointSize(20)
             font.setBold(True)
-            self.nameLabel.setFont(font)
+            self.headerButton.setFont(font)
+            self.body = QWidget()
+
+            self.headerButton.clicked.connect(self.toggle_expanded)
+
 
             # for each other field in settings, get the name and value and create a setting widget from it
             for field in fields(self.settings):
                 setting_name = field.name
                 value = getattr(self.settings, setting_name)
+                scale = self.DISPLAY_SCALES.get(setting_name, 1)
+                if scale != 1:
+                    value = round(value / scale)
                 editor = self.create_setting_widget(value)
                 self.setting_widgets[setting_name] = editor
 
@@ -450,9 +470,8 @@ class PresetWidget (QWidget):
 
         ## @brief layout the widgets that were genereted by previous functions properly
         def create_layout(self):
-            layout = QVBoxLayout()
-
-            layout.addWidget(self.nameLabel)
+            body_layout = QVBoxLayout(self.body)
+            body_layout.setContentsMargins(24, 0, 0, 0)
             
             # for each field in settings...
             for field in fields(self.settings):
@@ -479,8 +498,12 @@ class PresetWidget (QWidget):
                 label = QLabel(label_text)
 
                 # add the label and the generated widget to the display
-                layout.addWidget(label)
-                layout.addWidget(editor)
+                body_layout.addWidget(label)
+                body_layout.addWidget(editor)
+
+            layout = QVBoxLayout()
+            layout.addWidget(self.headerButton)
+            layout.addWidget(self.body)
 
             return layout
         ## @brief converts the edited Qt Controls back into dataclasses
@@ -501,7 +524,9 @@ class PresetWidget (QWidget):
                 if isinstance(original_value, bool):
                     values[setting_name] = editor.isChecked()
                 elif isinstance(original_value, int) or isinstance(original_value, float):
-                    values[setting_name] = editor.value()
+                    # convert from the displayed unit back to the stored unit
+                    scale = self.DISPLAY_SCALES.get(setting_name, 1)
+                    values[setting_name] = editor.value() * scale
                 elif isinstance(original_value, str):
                     values[setting_name] = editor.text()
                 # if the value is a list get all of the elements of the list
@@ -515,6 +540,22 @@ class PresetWidget (QWidget):
                     raise TypeError(f"Unsupported preset setting type: {type(original_value).__name__}")
             # return the correct type of settings object
             return type(self.settings)(**values)
+        
+        ## @brief opens the dropdown if it is closed, closes it if it is open
+        def toggle_expanded(self):
+            self.set_expanded(not self.expanded)
+
+        ## @brief shows or hides the editable fields and updates the arrow indicator
+        def set_expanded(self, expanded):
+            self.expanded = expanded
+            self.body.setVisible(expanded)
+
+            arrow = "\u25BC" if  expanded else "\u25B6"
+            self.headerButton.setText(f"{arrow} {self.preset_name}")
+
+            self.layout().invalidate()
+            self.layout().activate()
+            self.expansionChanged.emit()
 
 ## @brief Custom SpinBox class so that the values can't be changed with scrolling
 class NoScrollSpinBox(QSpinBox):
