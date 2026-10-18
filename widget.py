@@ -36,7 +36,9 @@ from PySide6.QtWidgets import (
         QCheckBox, 
         QInputDialog,
         QScrollArea,
-        QSizePolicy
+        QSizePolicy,
+        QComboBox,
+        QLabel
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
@@ -52,6 +54,7 @@ class Widget(QWidget):
         def __init__(self, parent=None):
                 config_preset_path = "presets.ini"
                 super().__init__(parent)
+                self.comboBoxes = []
                 self.processing_overlay = None
                 # list of the current selected preset for each function
                 self.selected_presets = {
@@ -76,6 +79,7 @@ class Widget(QWidget):
                 # Add buttons to program
                 self.button_setup(self.buttons)
 
+                self.other_ui_setup()
                 # Adding checkboxes to program...
                 self.checkbox_setup(self.checkboxes)
 
@@ -96,6 +100,50 @@ class Widget(QWidget):
 
         # ---------------------- UI Setup Methods --------------------------------------------
 
+        def other_ui_setup(self):
+                self.presetsBackground = self.findChild(QComboBox, "presetsBackground")
+                self.comboBoxes.append(self.presetsBackground)
+                self.presetsBackground.currentTextChanged.connect(
+                        lambda name: self.on_preset_changed("background", name)
+                )
+
+                self.presetsCrop = self.findChild(QComboBox, "presetsCrop")
+                self.comboBoxes.append(self.presetsCrop)
+                self.presetsCrop.currentTextChanged.connect(
+                        lambda name: self.on_preset_changed("crop", name)
+                )
+
+                self.presetsCompress = self.findChild(QComboBox, "presetsCompress")
+                self.comboBoxes.append(self.presetsCompress)
+                self.presetsCompress.currentTextChanged.connect(
+                        lambda name: self.on_preset_changed("compression", name)
+                )
+
+                self.presetsAlign = self.findChild(QComboBox, "presetsAlign")
+                self.comboBoxes.append(self.presetsAlign)
+                self.presetsAlign.currentTextChanged.connect(
+                        lambda name: self.on_preset_changed("alignment", name)
+                )
+
+                self.populate_preset_combo(self.presetsBackground, "background")
+                self.populate_preset_combo(self.presetsAlign, "alignment")
+                self.populate_preset_combo(self.presetsCompress, "compression")
+                self.populate_preset_combo(self.presetsCrop, "crop")
+
+                self.creditsLabel = self.findChild(QLabel, "creditsLabel")
+                self.creditsLabel.linkActivated.connect(self.on_creditsLabel_linkActivated)
+        
+        def populate_preset_combo(self, combo, preset_type):
+                preset_names = [
+                        name
+                        for name in self.config.sections()
+                        if self.config[name].get("type") == preset_type
+                ]
+
+                combo.clear()
+                combo.setPlaceholderText("Select a preset...")
+                combo.addItems(preset_names)
+                combo.setCurrentIndex(-1)
         ## @brief Connects all buttons in the GUI to their corresponding methods
         #
         # @param buttons The list of buttons on the form
@@ -112,35 +160,10 @@ class Widget(QWidget):
                 buttons.append(self.selectFileButton)
                 self.selectFileButton.clicked.connect(self.on_selectFileButton_clicked)
 
-                # Add background presets button to class
-                self.presetsBackground = self.findChild(QPushButton, "presetsBackground")
-                buttons.append(self.presetsBackground)
-                self.presetsBackground.clicked.connect(self.on_presetsBackground_clicked)
-
-                # Add crop presets button to class
-                self.presetsCrop = self.findChild(QPushButton, "presetsCrop")
-                buttons.append(self.presetsCrop)
-                self.presetsCrop.clicked.connect(self.on_presetsCrop_clicked)
-
-                # Add compress presets button to class
-                self.presetsCompress = self.findChild(QPushButton, "presetsCompress")
-                buttons.append(self.presetsCompress)
-                self.presetsCompress.clicked.connect(self.on_presetsCompress_clicked)
-
-                # Add align presets button to class
-                self.presetsAlign = self.findChild(QPushButton, "presetsAlign")
-                buttons.append(self.presetsAlign)
-                self.presetsAlign.clicked.connect(self.on_presetsAlign_clicked)
-
                 # Add start button to class
                 self.startButton = self.findChild(QPushButton, "startButton")
                 buttons.append(self.startButton)
                 self.startButton.clicked.connect(self.on_startButton_clicked)
-
-                # Add credits button to class
-                self.creditsButton = self.findChild(QPushButton, "creditsButton")
-                buttons.append(self.creditsButton)
-                self.creditsButton.clicked.connect(self.on_creditsButton_clicked)
 
 
         ## @brief Connects all buttons in the GUI to their corresponding methods
@@ -179,23 +202,8 @@ class Widget(QWidget):
 
         ## @brief Defines the interaction for the select file button
         def on_selectFileButton_clicked(self):
-                print("Select file button interaction")
-
-        ## @brief Defines the interaction for the background preset button
-        def on_presetsBackground_clicked(self):
-                self.select_preset("background", self.presetsBackground)
-
-        ## @brief Defines the interaction for the crop preset button
-        def on_presetsCrop_clicked(self):
-                self.select_preset("crop", self.presetsCrop)
-
-        ## @brief Defines the interaction for the compress preset button
-        def on_presetsCompress_clicked(self):
-                self.select_preset("compression", self.presetsCompress)
-
-        ## @brief Defines the interaction for the align preset button
-        def on_presetsAlign_clicked(self):
-                self.select_preset("alignment", self.presetsAlign)
+                # TODO: Select folder
+                self.scrollArea.setEnabled(True)
 
         ## @brief Defines the interaction for the start button
         def on_startButton_clicked(self):
@@ -204,12 +212,6 @@ class Widget(QWidget):
                 self.processing_overlay.setGeometry(self.rect())
                 self.processing_overlay.raise_()
                 self.processing_overlay.show()
-
-        ## @brief defines the interaction for the credits button
-        def on_creditsButton_clicked(self):
-                self.credits_window = CreditsWidget(self)
-                self.credits_window.show()
-                self.hide()
 
         # ------------- End Button interaction methods ----------------------------------------
 
@@ -224,6 +226,11 @@ class Widget(QWidget):
                 else:
                         self.startButton.setEnabled(False)
 
+                if (state == Qt.CheckState.Checked):
+                        self.presetsBackground.setEnabled(True)
+                elif (state == Qt.CheckState.Unchecked):
+                        self.presetsBackground.setEnabled(False)
+
         ## @brief Defines the interaction for the compress checkbox
         def on_checkboxCompress_stateChanged(self, state):
                 print(f"Compress check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
@@ -231,6 +238,11 @@ class Widget(QWidget):
                         self.startButton.setEnabled(True)
                 else:
                         self.startButton.setEnabled(False)
+
+                if (state == Qt.CheckState.Checked):
+                        self.presetsCompress.setEnabled(True)
+                elif (state == Qt.CheckState.Unchecked):
+                        self.presetsCompress.setEnabled(False)
 
         ## @brief Defines the interaction for the crop checkbox
         def on_checkboxCrop_stateChanged(self, state):
@@ -240,6 +252,11 @@ class Widget(QWidget):
                 else:
                         self.startButton.setEnabled(False)
 
+                if (state == Qt.CheckState.Checked):
+                        self.presetsCrop.setEnabled(True)
+                elif (state == Qt.CheckState.Unchecked):
+                        self.presetsCrop.setEnabled(False)
+
         ## @brief Defines the interaction for the align checkbox
         def on_checkboxAlign_stateChanged(self, state):
                 print(f"Align check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
@@ -248,57 +265,23 @@ class Widget(QWidget):
                 else:
                         self.startButton.setEnabled(False)
 
+                if (state == Qt.CheckState.Checked):
+                        self.presetsAlign.setEnabled(True)
+                elif (state == Qt.CheckState.Unchecked):
+                        self.presetsAlign.setEnabled(False)
+
         # ------------- End Checkbox interaction methods ----------------------------------------
-        
-        ## brief select a preset of a particular type
-        def select_preset(self, preset_type, button):
-
-                # Get the list of preset names from the config file
-                preset_names = [
-                        name
-                        for name in self.config.sections()
-                        if self.config[name].get("type") == preset_type
-                ]
-
-                # insert a "None" option into the selection list (to leave room for custom non-preset operations)
-                preset_names.insert(0, "None")
-                
-                # If no presets for the type...
-                # In theory this never triggers, as None has been manually inserted
-                if not preset_names:
-                        print(f"No {preset_type} presets available")
-                        return
-                
-                # Open a selection dialog for the presets
-                preset_name, accepted = QInputDialog.getItem(
-                        self,
-                        "Select Preset",
-                        "Preset:",
-                        preset_names,
-                        0,
-                        False
-                )
-
-                # if the user closed the dialog and didn't select an option, then do not continue with the function
-                if not accepted:
-                        return
-
-                # If None is selected then set the selected preset to None, update text appropriately
+        def on_preset_changed(self, preset_type, preset_name):
                 if preset_name == "None":
                         self.selected_presets[preset_type] = None
-                        button.setText("Current Preset: None")
-                # Else if an option was selected, set the selected preset to the option, update the text appropriately
                 else:
                         self.selected_presets[preset_type] = preset_name
-                        button.setText(f"Current Preset: {preset_name}")
-
-                # Update the scrollArea width based on the new button widths
-                self.update_preset_area_width()
-                print(f"selected {preset_type} preset: {preset_name}")
+                
+                print(f"selected {preset_type} preset: {self.selected_presets[preset_type]}")
 
         ## @brief Update the scroll area width depending on the width of the buttons
         def update_preset_area_width(self):
-                buttons = [
+                comboboxes = [
                 self.presetsBackground,
                 self.presetsCrop,
                 self.presetsCompress,
@@ -308,10 +291,10 @@ class Widget(QWidget):
                 required_width = 200
 
                 # update the required width based on the max width of a button
-                for button in buttons:
+                for box in comboboxes:
                         required_width = max(
                                 required_width,
-                                button.sizeHint().width() + 20
+                                box.sizeHint().width() + 20
                         )
                 
                 # Set the minimum width to the found required width
@@ -325,6 +308,21 @@ class Widget(QWidget):
 
                 if self.processing_overlay is not None:
                         self.processing_overlay.setGeometry(self.rect())
+        
+        def reload_config(self):
+                self.config.clear()
+                self.config.read(self.config_preset_path)
+
+                self.populate_preset_combo(self.presetsBackground, "background")
+                self.populate_preset_combo(self.presetsAlign, "alignment")
+                self.populate_preset_combo(self.presetsCompress, "compression")
+                self.populate_preset_combo(self.presetsCrop, "crop")
+        
+        def on_creditsLabel_linkActivated(self, link: str):
+                self.credits_window = CreditsWidget(self)
+                self.credits_window.show()
+                self.hide()
+                
 
 
 if __name__ == "__main__":
