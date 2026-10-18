@@ -66,11 +66,11 @@ class Widget (QWidget):
 
     ## @brief get a CompressionSettings object for a given preset
     def get_compression_settings(self, preset_name):
-        # Get the name of the preset from the configuration file
-        preset = self.config[preset_name]
 
+        preset = self.config[preset_name]
         # return the corresponding compressionSettings object based on the fields in the file
         return compression.CompressionSettings(
+            name = preset_name,
             max_file_size = preset.getint("max_file_size"),
             preferred_widths=[
                 int(width.strip()) for width in preset["preferred_widths"].split(",")
@@ -80,10 +80,11 @@ class Widget (QWidget):
         )
 
     ## @brief create a default settings object to be a placeholder for a particular preset type
-    def create_default_settings(self, preset_type):
+    def create_default_settings(self, preset_type, name):
         # Return the corresponding Settings type depending on the preset type
         if preset_type == "compression":
             return compression.CompressionSettings(
+                name = name,
                 max_file_size=5000000,
                 preferred_widths=[3840,2560,1920],
                 min_height=1080,
@@ -145,6 +146,8 @@ class Widget (QWidget):
 
         # For every field in the settings object...
         for field in fields(settings):
+            if field.name == "name":
+                continue
             # Get the setting name
             setting_name = field.name
             # get the value
@@ -239,7 +242,7 @@ class Widget (QWidget):
             return
         
         # Create a default settings object for the preset type
-        settings = self.create_default_settings(preset_type)
+        settings = self.create_default_settings(preset_type, name)
 
         # add the preset type to the config (as this won't be displayed)
         self.config[name] = {
@@ -248,6 +251,8 @@ class Widget (QWidget):
 
         #for each field in the settings object...
         for field in fields(settings):
+            if field.name == "name":
+                continue
             # Set name to the correct name
             setting_name = field.name
             # Get the value from settings
@@ -398,6 +403,8 @@ class PresetWidget (QWidget):
 
             # for each other field in settings, get the name and value and create a setting widget from it
             for field in fields(self.settings):
+                if field.name == "name":
+                    continue
                 setting_name = field.name
                 value = getattr(self.settings, setting_name)
                 scale = self.DISPLAY_SCALES.get(setting_name, 1)
@@ -475,6 +482,8 @@ class PresetWidget (QWidget):
             
             # for each field in settings...
             for field in fields(self.settings):
+                if field.name == "name":
+                    continue
                 # get the name of the field
                 setting_name = field.name
                 # get the corresponding generated widget
@@ -512,6 +521,8 @@ class PresetWidget (QWidget):
 
             # For each value in the settings object
             for field in fields(self.settings):
+                if field.name == "name":
+                    continue
                 # Get the name
                 setting_name = field.name
                 # Get the widgets for the setting
@@ -539,6 +550,8 @@ class PresetWidget (QWidget):
                 else:
                     raise TypeError(f"Unsupported preset setting type: {type(original_value).__name__}")
             # return the correct type of settings object
+
+            values["name"] = self.preset_name
             return type(self.settings)(**values)
         
         ## @brief opens the dropdown if it is closed, closes it if it is open
