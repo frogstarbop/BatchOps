@@ -234,14 +234,6 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     processing_thread: threading.Thread = threading.Thread(target=processing_looper)
     processing_thread.start()
     print('processing thread started')
-
-    processing_thread.join()
-    print('processing thread completed')
-
-    file_IO_thread.join()
-    print('file io thread completed')
-
-    print('processing completed')
             
 def backup_get_image_data(image: PIL.Image.Image) -> bytes:
     # create an in-memory byte buffer than can be written to and read from
