@@ -199,10 +199,6 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
         nonlocal settings
 
         while True:
-            # wait until there is something to process
-            if in_queue.empty():
-                time.sleep(QUEUE_WAITING_SLEEP_SECONDS)
-
             image: PIL.Image.Image|None = in_queue.get()
 
             # if receive fin flag, processing complete
@@ -217,9 +213,6 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
                 data = process_image(image, settings)
 
                 # wait for a space in the output queue to put the image
-                while out_queue.full():
-                    time.sleep(QUEUE_WAITING_SLEEP_SECONDS)
-
                 out_queue.put((file_name, data))
             # handle each processing-step's errors
             except compression.CompressionError as e:
