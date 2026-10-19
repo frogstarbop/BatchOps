@@ -95,8 +95,12 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     global stats_image_count_success
     global stats_image_count_failed
 
-    in_dir.validate()
-    out_dir.validate()
+    try:
+        in_dir.validate()
+        out_dir.validate()
+    except FolderError as e:
+        print(f'FOLDER ERROR: {e.path} {e}')
+        return
 
     # no more items will be coming, so the queue is 'finished'. Avoids inf. looping in the true and (hopefully) makes threads easier to manage? we find out!
     fin_flag = None
