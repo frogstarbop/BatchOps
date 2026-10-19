@@ -28,6 +28,7 @@ import configparser
 from edit_presets import Widget as EditPresetsWidget
 from credits import Widget as CreditsWidget
 from progress_window import Widget as ProcessingWidget
+from folder_manager import FolderManager
 from PySide6.QtWidgets import (
         QApplication, 
         QWidget, 
@@ -43,6 +44,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
+from pathlib import Path
 
 
 class Widget(QWidget):
@@ -55,6 +57,8 @@ class Widget(QWidget):
         def __init__(self, parent=None):
                 config_preset_path = "presets.ini"
                 super().__init__(parent)
+                self.in_dir = FolderManager("input", True)
+                self.out_dir = FolderManager("output", False)
                 self.comboBoxes = []
                 self.processing_overlay = None
                 # list of the current selected preset for each function
@@ -216,6 +220,10 @@ class Widget(QWidget):
                         return
                 
                 self.selected_folder = folder
+                self.in_dir.set_path(folder)
+
+                input_path = Path(folder)
+                self.out_dir.set_path(str(input_path.parent / f"{input_path.name}_processed"))
                 self.update_folder_label()
 
                 self.scrollArea.setEnabled(True)
