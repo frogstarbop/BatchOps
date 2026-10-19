@@ -28,7 +28,7 @@ import configparser
 from edit_presets import Widget as EditPresetsWidget
 from credits import Widget as CreditsWidget
 from progress_window import Widget as ProcessingWidget
-from folder_manager import FolderManager
+from folder_manager import FolderManager, FolderError
 from PySide6.QtWidgets import (
         QApplication, 
         QWidget, 
@@ -39,7 +39,8 @@ from PySide6.QtWidgets import (
         QScrollArea,
         QSizePolicy,
         QComboBox,
-        QLabel
+        QLabel,
+        QMessageBox
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
@@ -47,8 +48,7 @@ from PySide6.QtCore import Qt
 from pathlib import Path
 
 import processor
-from folder_manager import FolderManager
-from pathlib import Path
+import preset_loader
 from settings import Settings
 import image_compression as compression
 
@@ -57,7 +57,7 @@ class Widget(QWidget):
         buttons = []
         selected_folder = ""
         config = configparser.ConfigParser()
-        config_preset_path = "presets.ini"
+        config_preset_path = os.path.join(os.path.dirname(__file__), "presets.ini")
 
         def __init__(self, parent=None):
                 config_preset_path = "presets.ini"
@@ -249,6 +249,7 @@ class Widget(QWidget):
                 self.update_folder_label()
 
                 self.scrollArea.setEnabled(True)
+                self.update_start_enabled()
         
         ## @brief update the select folder label
         def update_folder_label(self):
@@ -267,6 +268,21 @@ class Widget(QWidget):
 
         ## @brief Defines the interaction for the start button
         def on_startButton_clicked(self):
+                try:
+                        settings = self.build_settings()
+                except (ValueError, NotImplementedError) as error:
+                        QMessageBox.warning(self, "Cannot start", str(error))
+                        return
+                
+                try:
+                        self.in_dir.validate()
+                        self.out_dir.validate()
+                except FolderError as error:
+                        QMessageBox.warning(self, "Folder problem", f"{error.path}: {error}")
+                        return
+                
+                processor.process(settings, self.in_dir, self.out_dir)
+                
                 self.processing_overlay = ProcessingWidget(self)
 
                 self.processing_overlay.setGeometry(self.rect())
@@ -274,51 +290,81 @@ class Widget(QWidget):
                 self.processing_overlay.show()
 
                 self.start_processing()
+        def update_start_enabled(self):
+                self.startButton.setEnabled(
+                        self.in_dir.path is not None and self.check_any_checkbox_states()
+                )
 
-        ## @brief Starts the actual image processing
-        def start_processing(self):
-            # TEMP: remove when folder buttons used to set path
-            in_path: Path = Path('tests').joinpath('images').joinpath('bulk').joinpath('studio_huge')
-            out_path: Path = Path('tests').joinpath('images').joinpath('OUTPUTS')
+        def build_settings(self) -> Settings:
+                # Error when headalignment as it doesn't exist yet
+                if self.checkboxAlign.checkState() == Qt.CheckState.Checked:
+                        raise ValueError("Head alignment isn't available yet")
+                
+                def load_step(checkbox, preset_type, step_name):
+                        if checkbox.checkState() != Qt.CheckState.Checked:
+                                return None
+                        preset_name = self.selected_presets[preset_type]
+                        if preset_name is None:
+                                raise ValueError(f"select a {step_name} preset first")
+                        return preset_loader.load_settings(self.config, preset_name)
+                background = load_step(self.checkboxBackground, "background", "background removal")
+                cropping = load_step(self.checkboxCrop, "crop", "crop")
+                compression = load_step(self.checkboxCompress, "compression", "compression")
 
-            # TODO: make/keep track of these from when user sets via the 'Choose input folder' button
-            in_dir: FolderManager = FolderManager('in', True)
-            out_dir: FolderManager = FolderManager('out', False)
-            in_dir.set_path(str(in_path))
-            out_dir.set_path(str(out_path))
+                return Settings(
+                        compression_enabled = compression is not None,
+                        compression = compression,
+                        head_alignment_enabled = False,
+                        head_alignment=None,
+                        cropping_enabled = cropping is not None,
+                        cropping = cropping,
+                        bg_removal_enabled= background is not None,
+                        bg_removal=background
+                )
+        # ## @brief Starts the actual image processing
+        # def start_processing(self):
+        #     # TEMP: remove when folder buttons used to set path
+        #     in_path: Path = Path('tests').joinpath('images').joinpath('bulk').joinpath('studio_huge')
+        #     out_path: Path = Path('tests').joinpath('images').joinpath('OUTPUTS')
 
-            compression_normal = compression.CompressionSettings(
-                # yoinked from compression_tests.py
-                name='standard',
-                max_file_size=600 * 1000,
-                preferred_widths=[1280, 1920, 2560],
-                min_height=720,
-                quality=75
-            )
-            compression_evil = compression.CompressionSettings(
-                # yoinked from compression_tests.py
-                name='evil',
-                max_file_size=1 * 1000,
-                preferred_widths=[1280, 1920, 2560],
-                min_height=720,
-                quality=90
-            )
+        #     # TODO: make/keep track of these from when user sets via the 'Choose input folder' button
+        #     in_dir: FolderManager = FolderManager('in', True)
+        #     out_dir: FolderManager = FolderManager('out', False)
+        #     in_dir.set_path(str(in_path))
+        #     out_dir.set_path(str(out_path))
 
-            # TODO: make settings object from the presets selected
-            # for now, copied from processor test
-            settings = Settings(
-                compression_enabled=True,
-                compression=compression_normal,
-                bg_removal_enabled=False,
-                bg_removal=None,
-                head_alignment_enabled=False,
-                head_alignment=None,
-                cropping_enabled=False,
-                cropping=None
-            )
+        #     compression_normal = compression.CompressionSettings(
+        #         # yoinked from compression_tests.py
+        #         name='standard',
+        #         max_file_size=600 * 1000,
+        #         preferred_widths=[1280, 1920, 2560],
+        #         min_height=720,
+        #         quality=75
+        #     )
+        #     compression_evil = compression.CompressionSettings(
+        #         # yoinked from compression_tests.py
+        #         name='evil',
+        #         max_file_size=1 * 1000,
+        #         preferred_widths=[1280, 1920, 2560],
+        #         min_height=720,
+        #         quality=90
+        #     )
 
-            # GET IT MOVING
-            processor.process(settings, in_dir, out_dir)
+        #     # TODO: make settings object from the presets selected
+        #     # for now, copied from processor test
+        #     settings = Settings(
+        #         compression_enabled=True,
+        #         compression=compression_normal,
+        #         bg_removal_enabled=False,
+        #         bg_removal=None,
+        #         head_alignment_enabled=False,
+        #         head_alignment=None,
+        #         cropping_enabled=False,
+        #         cropping=None
+        #     )
+
+        #     # GET IT MOVING
+        #     processor.process(settings, in_dir, out_dir)
         # ------------- End Button interaction methods ----------------------------------------
 
 
@@ -327,10 +373,7 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the background checkbox
         def on_checkboxBackground_stateChanged(self, state):
                 print(f"Background check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
-                if(self.check_any_checkbox_states()):
-                        self.startButton.setEnabled(True)
-                else:
-                        self.startButton.setEnabled(False)
+                self.update_start_enabled()
 
                 if (state == Qt.CheckState.Checked):
                         self.presetsBackground.setEnabled(True)
@@ -340,10 +383,7 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the compress checkbox
         def on_checkboxCompress_stateChanged(self, state):
                 print(f"Compress check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
-                if(self.check_any_checkbox_states()):
-                        self.startButton.setEnabled(True)
-                else:
-                        self.startButton.setEnabled(False)
+                self.update_start_enabled()
 
                 if (state == Qt.CheckState.Checked):
                         self.presetsCompress.setEnabled(True)
@@ -353,10 +393,7 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the crop checkbox
         def on_checkboxCrop_stateChanged(self, state):
                 print(f"Crop check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
-                if(self.check_any_checkbox_states()):
-                        self.startButton.setEnabled(True)
-                else:
-                        self.startButton.setEnabled(False)
+                self.update_start_enabled()
 
                 if (state == Qt.CheckState.Checked):
                         self.presetsCrop.setEnabled(True)
@@ -366,10 +403,7 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the align checkbox
         def on_checkboxAlign_stateChanged(self, state):
                 print(f"Align check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
-                if(self.check_any_checkbox_states()):
-                        self.startButton.setEnabled(True)
-                else:
-                        self.startButton.setEnabled(False)
+                self.update_start_enabled()
 
                 if (state == Qt.CheckState.Checked):
                         self.presetsAlign.setEnabled(True)
@@ -378,7 +412,7 @@ class Widget(QWidget):
 
         # ------------- End Checkbox interaction methods ----------------------------------------
         def on_preset_changed(self, preset_type, preset_name):
-                if preset_name == "None":
+                if not preset_name or preset_name == "None":
                         self.selected_presets[preset_type] = None
                 else:
                         self.selected_presets[preset_type] = preset_name
