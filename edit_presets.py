@@ -6,6 +6,7 @@ import configparser
 import image_compression as compression
 import cropping
 import bg_replacer as background
+import preset_loader
 from dataclasses import fields
 from PySide6.QtWidgets import (
     QApplication,
@@ -140,16 +141,23 @@ class Widget (QWidget):
         preset = self.config[preset_name]
         preset_type = preset.get("type")
 
-        if preset_type == "compression":
-            return self.get_compression_settings(preset_name)
-        elif preset_type == "crop":
-            return self.get_cropping_settings(preset_name)
-        elif preset_type == "background":
-            return self.get_background_settings(preset_name)
-        else:
-            raise NotImplementedError(
-                f"Type {preset_type} is not currently supported"
-            )
+        match (preset_type):
+            case "compression" | "crop" | "background":
+                return preset_loader.load_settings(self.config, preset_type=preset_type, preset_name=preset_name)
+            case _:
+                raise NotImplementedError(
+                    f"Type {preset_type} is not currently supported"
+                )
+        # if preset_type == "compression":
+        #     return self.get_compression_settings(preset_name)
+        # elif preset_type == "crop":
+        #     return self.get_cropping_settings(preset_name)
+        # elif preset_type == "background":
+        #     return self.get_background_settings(preset_name)
+        # else:
+        #     raise NotImplementedError(
+        #         f"Type {preset_type} is not currently supported"
+        #     )
     # ------------- Preset saving and loading ----------------------------------------
 
     # TODO: adjust this so that it is generic (doesn't just respond to CompressionSettings objects)
