@@ -14,6 +14,52 @@ import cropping
 QUEUE_WAITING_SLEEP_SECONDS: float = 0.05
 QUEUE_SHORT_SLEEP_SECONDS: float = 0.01
 
+### stats section ###
+# statistics to show for ui
+stats_image_count_total = 0
+stats_image_count_success = 0
+stats_image_count_failed = 0
+stats_time_started = 0
+
+## @brief Gets the current time IN SECONDS since epoch
+def get_now() -> int:
+    return int(time.time()) 
+def mark_start_time() -> None:
+    global stats_time_started
+    stats_time_started = get_now()
+
+# getters
+def get_images_total() -> int:
+    global stats_image_count_total
+    return stats_image_count_total
+def get_images_success() -> int:
+    global stats_image_count_success
+    return stats_image_count_success
+def get_images_failed() -> int:
+    global stats_image_count_failed
+    return stats_image_count_failed
+
+## @brief get the progress as a float value (QoL getter)
+def get_progress() -> float:
+    global stats_image_count_total
+    global stats_image_count_success
+    global stats_image_count_failed
+    if stats_image_count_total == 0:
+        return 0
+    images_done = stats_image_count_success + stats_image_count_failed
+    return images_done / stats_image_count_total
+
+## @brief Get seconds remaining estimate
+def get_estimated_time_left() -> int:
+    global stats_time_started
+    delta_time = get_now() - stats_time_started
+
+    progress = get_progress()
+    total_time = delta_time / progress
+    time_left = total_time - delta_time
+    return int(time_left)
+
+### main section ###
 # splitting image processing from the queue for obv reasons
 # will throw any errors faced during processing step running
 # settings -> error handling
@@ -45,6 +91,10 @@ def process_image(image: PIL.Image.Image, settings: Settings) -> bytes:
     return data
 
 def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
+    global stats_image_count_total
+    global stats_image_count_success
+    global stats_image_count_failed
+
     in_dir.validate()
     out_dir.validate()
 
@@ -66,8 +116,15 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     # setup the iterator over the input directory
     in_iter = iter(in_dir)
 
+    # stats init
+    mark_start_time()
+    stats_image_count_total = in_dir.__count_images()
+    stats_image_count_failed = 0
+    stats_image_count_success = 0
+
     # a thread which constantly tries to load/save files for the queues
     # instead of reading the whole input folder into the input queue immediately
+    # also handles updating stat image counts
     def file_IO_looper():
         nonlocal in_queue
         nonlocal out_queue
@@ -75,6 +132,8 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
         nonlocal fin_flag
         nonlocal in_iter
         nonlocal err_dir
+        global stats_image_count_failed
+        global stats_image_count_success
 
         while True:
             # prioritize outputting
@@ -103,10 +162,12 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
 
                 # TODO: save each type of processing-step error to a different dir
                 err_dir.write_file(file_name, data)
+                stats_image_count_failed += 1
 
             elif not in_queue.full():
                 try:
                     image: PIL.Image.Image = next(in_iter)
+                    stats_image_count_success += 1
 
                     file_name = getattr(image, 'filename')
                     assert file_name is not None
