@@ -60,11 +60,7 @@ def get_image_data(image: PIL.Image.Image, settings: CompressionSettings) -> tup
 # @param image The image to be compressed
 # @param settings The details of how much compression and decision boundaries
 # @returns A byte array containing the data of the compressed JPEG
-def process(image: PIL.Image.Image, settings: CompressionSettings, filename: str | None) -> bytes:
-    if filename is None:
-        filename = getattr(image, 'filename', None)
-    assert filename is not None
-    
+def process(image: PIL.Image.Image, settings: CompressionSettings) -> bytes:
     # ensure widths are in descending order
     widths = sorted(settings.preferred_widths,reverse=True)
 

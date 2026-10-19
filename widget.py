@@ -38,15 +38,11 @@ from PySide6.QtWidgets import (
         QScrollArea,
         QSizePolicy,
         QComboBox,
-        QLabel,
-        QMessageBox
+        QLabel
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
-from folder_manager import FolderManager, FolderError
-from settings import Settings
-import preset_loader
 
 
 class Widget(QWidget):
@@ -223,7 +219,6 @@ class Widget(QWidget):
                 self.update_folder_label()
 
                 self.scrollArea.setEnabled(True)
-                self.update_start_enabled()
         
         def update_folder_label(self):
                 label = self.selectedFolderLabel
@@ -237,37 +232,8 @@ class Widget(QWidget):
 
         ## @brief Defines the interaction for the start button
         def on_startButton_clicked(self):
-                # self.processing_overlay = ProcessingWidget(self)
+                self.processing_overlay = ProcessingWidget(self)
 
-                # self.processing_overlay.setGeometry(self.rect())
-                # self.processing_overlay.raise_()
-                # self.processing_overlay.show()
-
-                if self.checkBoxAlign.checkState() == Qt.CheckState.Checked:
-                        QMessageBox.warning(self, "Not available", "Head alignment is not implemented yet, untick it to continue")
-                        return
-                try:
-                        settings = self.build_settings()
-                except ValueError as error:
-                        QMessageBox.warning(self,"Cannot start", str(error))
-                        return
-                
-                output_folder = QFileDialog.getExistingDirectory(self, "Select Output Folder", self.selected_folder)
-                if not output_folder:
-                        return
-                
-                in_dir = FolderManager("input", True)
-                out_dir = FolderManager("output", False)
-                in_dir.set_path(self.selected_folder)
-                out_dir.set_path(output_folder)
-
-                try:
-                        in_dir.validate()
-                        out_dir.validate()
-                except FolderError as error:
-                        QMessageBox.warning(self, "Folder problem", f"{error.path}: {error}")
-
-                self.processing_overlay = ProcessingWidget(self, settings, in_dir, out_dir)
                 self.processing_overlay.setGeometry(self.rect())
                 self.processing_overlay.raise_()
                 self.processing_overlay.show()
@@ -280,8 +246,10 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the background checkbox
         def on_checkboxBackground_stateChanged(self, state):
                 print(f"Background check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
-
-                self.update_start_enabled()
+                if(self.check_any_checkbox_states()):
+                        self.startButton.setEnabled(True)
+                else:
+                        self.startButton.setEnabled(False)
 
                 if (state == Qt.CheckState.Checked):
                         self.presetsBackground.setEnabled(True)
@@ -291,7 +259,10 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the compress checkbox
         def on_checkboxCompress_stateChanged(self, state):
                 print(f"Compress check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
-                self.update_start_enabled()
+                if(self.check_any_checkbox_states()):
+                        self.startButton.setEnabled(True)
+                else:
+                        self.startButton.setEnabled(False)
 
                 if (state == Qt.CheckState.Checked):
                         self.presetsCompress.setEnabled(True)
@@ -301,7 +272,10 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the crop checkbox
         def on_checkboxCrop_stateChanged(self, state):
                 print(f"Crop check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
-                self.update_start_enabled()
+                if(self.check_any_checkbox_states()):
+                        self.startButton.setEnabled(True)
+                else:
+                        self.startButton.setEnabled(False)
 
                 if (state == Qt.CheckState.Checked):
                         self.presetsCrop.setEnabled(True)
@@ -311,36 +285,16 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the align checkbox
         def on_checkboxAlign_stateChanged(self, state):
                 print(f"Align check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
-                self.update_start_enabled()
+                if(self.check_any_checkbox_states()):
+                        self.startButton.setEnabled(True)
+                else:
+                        self.startButton.setEnabled(False)
 
                 if (state == Qt.CheckState.Checked):
                         self.presetsAlign.setEnabled(True)
                 elif (state == Qt.CheckState.Unchecked):
                         self.presetsAlign.setEnabled(False)
 
-
-        ## @brief enables the start button only when a folder is chosen and a step is ticked
-        def update_start_enabled(self):
-                self.startButton.setEnabled(
-                        bool(self.selected_folder) and self.check_any_checkbox_states()
-                )
-        
-        def build_settings(self) -> Settings:
-                settings = Settings()
-                steps = [
-                        (self.checkboxBackground, "background", "background"),
-                        (self.checkboxCrop, "crop", "cropping"),
-                        (self.checkboxCompress, "compression", "compression")
-                ]
-
-                for checkbox, preset_type, attribute in steps:
-                        if checkbox.checkState() != Qt.CheckState.Checked:
-                                continue
-                        preset_name = self.selected_presets[preset_type]
-                        if not preset_name:
-                                raise ValueError(f"Select a {preset_type} preset first")
-                        setattr(settings, attribute, preset_loader.load_settings(self.config, preset_type, preset_name))
-                return settings
         # ------------- End Checkbox interaction methods ----------------------------------------
         def on_preset_changed(self, preset_type, preset_name):
                 if preset_name == "None":
