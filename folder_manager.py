@@ -129,8 +129,8 @@ class FolderManager:
 
         file_path = Path.joinpath(self.path, file_name)
 
-        # open writer in exclusive-creation (x) for bytes (b), with buffering
-        writer: io.BufferedWriter = open(file_path, 'xb', 1)
+        # open writer in exclusive-creation (x) for bytes (b)
+        writer: io.BufferedWriter = open(file_path, 'xb')
 
         writer.write(data)
         writer.close()
