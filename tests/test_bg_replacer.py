@@ -71,7 +71,7 @@ class TestBgReplacer(unittest.TestCase):
         cls.session = rembg.new_session("birefnet-portrait")
 
         # Setup the path to test images
-        cls.test_image_path = os.path.join(current_dir, "images", "studio", "front.jpg")
+        cls.test_image_path = os.path.join(current_dir, "images", "jpeg", "studio", "DSC09549.jpg")
 
     def test_replace_background_execution(self):
         """Tests that the main function processes an image and returns a valid output."""

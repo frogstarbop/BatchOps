@@ -1,7 +1,15 @@
+from dataclasses import dataclass
 import PIL.Image
 import PIL.ImageOps
 import io
 import os
+
+## @brief a container for all the settings for cropping an image
+@dataclass
+class CroppingSettings:
+    name: str
+    width_ratio: int
+    height_ratio: int
 
 def cropping(image: PIL.Image.Image, width_ratio: int, height_ratio: int) -> PIL.Image.Image:
 

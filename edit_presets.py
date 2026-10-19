@@ -3,7 +3,9 @@
 import sys
 import os
 import configparser
-import compression
+import image_compression as compression
+import cropping
+import bg_replacer as background
 from dataclasses import fields
 from PySide6.QtWidgets import (
     QApplication,
@@ -79,6 +81,32 @@ class Widget (QWidget):
             quality = preset.getint("quality")
         )
 
+    ## @brief get a CroppingSettings object for a given preset
+    def get_cropping_settings(self, preset_name):
+        preset = self.config[preset_name]
+
+        # return the corresponding croppingSettings object based on the fields in the file
+        return cropping.CroppingSettings(
+            name = preset_name,
+            width_ratio = preset.getint("width_ratio"),
+            height_ratio = preset.getint("height_ratio")
+        )
+    
+    ## @brief get a BackgroundSettings object for a given preset
+    def get_background_settings(self, preset_name):
+        preset = self.config[preset_name]
+
+        # return the corresponding backgroundSettings object based on the fields in the file
+        return background.BackgroundSettings(
+            name = preset_name,
+            background_rgb = [
+                int(value.strip()) for value in preset["background_rgb"].split(",")
+            ],
+            intensity = preset["intensity"],
+            white_pt = preset.getfloat("white_py"),
+            model_name = preset["model_name"]
+        )
+
     ## @brief create a default settings object to be a placeholder for a particular preset type
     def create_default_settings(self, preset_type, name):
         # Return the corresponding Settings type depending on the preset type
@@ -90,16 +118,34 @@ class Widget (QWidget):
                 min_height=1080,
                 quality=90
             )
+        elif preset_type == "crop":
+            return cropping.CroppingSettings(
+                name=name,
+                width_ratio=16,
+                height_ratio=9
+            )
+        elif preset_type == "background":
+            return background.BackgroundSettings(
+                name=name,
+                background_rgb=[255,255,255],
+                intensity="natural",
+                white_pt =0.0,
+                model_name="u2net"
+            )
         else:
             raise NotImplementedError(f"Type {preset_type} is not currently supported")
 
-    # @brief generic get settings using more specific functions
+    ## @brief generic get settings using more specific functions
     def get_settings(self, preset_name):
         preset = self.config[preset_name]
         preset_type = preset.get("type")
 
         if preset_type == "compression":
             return self.get_compression_settings(preset_name)
+        elif preset_type == "crop":
+            return self.get_cropping_settings(preset_name)
+        elif preset_type == "background":
+            return self.get_background_settings(preset_name)
         else:
             raise NotImplementedError(
                 f"Type {preset_type} is not currently supported"
@@ -211,7 +257,7 @@ class Widget (QWidget):
             self,
             "Add Preset",
             "Preset type: ",
-            ["compression"],
+            ["compression", "crop", "background replacement"],
             0,
             False
         )

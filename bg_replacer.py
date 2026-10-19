@@ -1,8 +1,23 @@
+from dataclasses import dataclass
 import numpy as np
 import PIL.Image
 import PIL.ImageFilter
 from rembg import remove
 from rembg.sessions.base import BaseSession
+
+## @brief A container for all the settings for replacing an image's background
+@dataclass
+class BackgroundSettings:
+    name: str
+
+    background_rgb: list[int]
+
+    intensity: str 
+
+    white_pt: float
+
+    model_name: str
+
 
 # --- Normalization & Image Bounds ---
 MAX_PIXEL_VALUE = 255.0
