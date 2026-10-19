@@ -123,7 +123,9 @@ class FolderManager:
             self.path.mkdir()
 
         # file_name might be naughty and have a relative filepath
-        file_name = file_name.split('/')[-1]
+        # convert to and from Path type to cleanse it
+        file_path: Path = Path(file_name)
+        file_name = file_path.name
 
         file_path = Path.joinpath(self.path, file_name)
 
