@@ -31,23 +31,28 @@ def create_face_detector(
     return FaceDetector.create_from_options(options)
 
 
-## @brief Locates the single face and returns its centre coordinates
+## @brief Locates the most likely face and returns its centre coordinates
+#
+# If multiple faces are detected, the one with the highest confidence score is selected.
+# This handles false positives that can occur when using a low minimum confidence threshold,
+# which is necessary to pick up side-on and backwards shots of a person.
 #
 # @param image_array The (H, W, 3) RGB image to search
 # @param detector A face detector, created by create_face_detector()
-# @returns The (x, y) coordinates of the face centre in pixels
-# @raises ValueError If exactly one face is not found
+# @returns The (x, y) coordinates of the most confident face's centre in pixels
+# @raises ValueError If no faces are found
 def locate_face_centre(image_array: np.ndarray, detector: FaceDetector) -> tuple[float, float]:
     image_h, image_w = image_array.shape[:2]
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_array)
     detections = detector.detect(mp_image).detections
 
-    if len(detections) != 1:
-        raise ValueError(f"Expected exactly 1 face, found {len(detections)}")
+    if not detections:
+        raise ValueError("Expected at least 1 face, found 0")
 
-    box = detections[0].bounding_box
+    best_detection = max(detections, key=lambda d: d.categories[0].score)
 
-    # Clip the box to the image so a partly off-screen face doesn't skew the centre
+    box = best_detection.bounding_box
+
     left, top = max(box.origin_x, 0), max(box.origin_y, 0)
     right, bottom = min(box.origin_x + box.width, image_w), min(box.origin_y + box.height, image_h)
 
@@ -113,18 +118,19 @@ def reframe(image_array: np.ndarray, frame: tuple[int, int, int, int]) -> Image.
     return Image.fromarray(padded_array[crop_top: crop_top + frame_h, crop_left: crop_left + frame_w])
 
 
-## @brief Re-frames a portrait so the face sits at a fixed position, extending the background
+## @brief Re-frames a portrait so the primary face sits at a fixed position, extending the background
 #
-# The face is found with MediaPipe and the photo is re-framed with the same aspect ratio.
-# The photo must contain exactly one face.
-# Background is seamlessly reflected above and beside the person where needed, never underneath.
+# The most likely face is found with MediaPipe to account for false positives at low confidence
+# thresholds (needed for side-on and backwards shots), and the photo is re-framed with the same
+# aspect ratio. Background is seamlessly reflected above and beside the person where needed,
+# never underneath.
 #
 # @param image The portrait to process, already upright
 # @param detector A face detector, created by the caller with create_face_detector()
 # @param face_x Horizontal face placement as a fraction of output width (default 0.5)
 # @param face_y Vertical face placement as a fraction of output height from bottom (default 0.85)
 # @returns The new RGB PIL image, with the same aspect ratio as the input
-# @raises ValueError If exactly one face is not found, or the face is too low to frame
+# @raises ValueError If no faces are found, or the face is too low to frame
 def centre_face(
         image: Image.Image,
         detector: FaceDetector,
