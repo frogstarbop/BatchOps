@@ -167,6 +167,7 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
                 data: bytes = backup_get_image_data(image)
 
                 # TODO: save each type of processing-step error to a different dir
+                print(f'saving errored image to {str(err_dir)}')
                 err_dir.write_file(file_name, data)
                 stats_image_count_failed += 1
 
@@ -205,10 +206,12 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
             if image is None:
                 # put fin flag into output queue to let other threads know
                 out_queue.put(fin_flag)
+                print('processing looper: recieved fin flag')
                 return
 
             file_name:str = getattr(image, 'filename')
             assert file_name is not None
+            print(f'processing received {file_name}')
             try:
                 data = process_image(image, settings)
 
@@ -234,7 +237,7 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     print('processing thread completed')
 
     file_IO_thread.join()
-    print('file IO thread completed')
+    print('file io thread completed')
 
     print('processing completed')
             
