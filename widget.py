@@ -223,7 +223,7 @@ class Widget(QWidget):
         ## @brief Starts the actual image processing
         def start_processing(self):
             # TEMP: remove when folder buttons used to set path
-            in_path: Path = Path('tests').joinpath('images').joinpath('bulk').joinpath('studio_large')
+            in_path: Path = Path('tests').joinpath('images').joinpath('bulk').joinpath('studio_huge')
             out_path: Path = Path('tests').joinpath('images').joinpath('OUTPUTS')
 
             # TODO: make/keep track of these from when user sets via the 'Choose input folder' button
@@ -253,7 +253,7 @@ class Widget(QWidget):
             # for now, copied from processor test
             settings = Settings(
                 compression_enabled=True,
-                compression=compression_evil,
+                compression=compression_normal,
                 bg_removal_enabled=False,
                 bg_removal=None,
                 head_alignment_enabled=False,
