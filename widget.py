@@ -61,6 +61,7 @@ class Widget(QWidget):
                 self.out_dir = FolderManager("output", False)
                 self.comboBoxes = []
                 self.processing_overlay = None
+
                 # list of the current selected preset for each function
                 self.selected_presets = {
                         "background": None,
@@ -74,12 +75,14 @@ class Widget(QWidget):
                 ui_path = os.path.join(os.path.dirname(__file__), "form.ui")
                 self.ui = loader.load(ui_path, self)
 
+                # If the config already exists, then read it, else create a config file
                 if os.path.exists(self.config_preset_path):
                         self.config.read(self.config_preset_path)
                         print("config exists")
                 else:
                         with open(self.config_preset_path, "w") as configfile:
                                 self.config.write(configfile)
+
                 self.scrollArea = self.findChild(QScrollArea, "scrollArea")
                 # Add buttons to program
                 self.button_setup(self.buttons)
@@ -106,47 +109,57 @@ class Widget(QWidget):
         # ---------------------- UI Setup Methods --------------------------------------------
 
         def other_ui_setup(self):
+                # Setup background preset selector
                 self.presetsBackground = self.findChild(QComboBox, "presetsBackground")
                 self.comboBoxes.append(self.presetsBackground)
                 self.presetsBackground.currentTextChanged.connect(
                         lambda name: self.on_preset_changed("background", name)
                 )
-
+                
+                # Setup crop preset selector
                 self.presetsCrop = self.findChild(QComboBox, "presetsCrop")
                 self.comboBoxes.append(self.presetsCrop)
                 self.presetsCrop.currentTextChanged.connect(
                         lambda name: self.on_preset_changed("crop", name)
                 )
 
+                # Setup compress preset selector
                 self.presetsCompress = self.findChild(QComboBox, "presetsCompress")
                 self.comboBoxes.append(self.presetsCompress)
                 self.presetsCompress.currentTextChanged.connect(
                         lambda name: self.on_preset_changed("compression", name)
                 )
 
+                # Setup align preset selector
                 self.presetsAlign = self.findChild(QComboBox, "presetsAlign")
                 self.comboBoxes.append(self.presetsAlign)
                 self.presetsAlign.currentTextChanged.connect(
                         lambda name: self.on_preset_changed("alignment", name)
                 )
 
+                # Populate comboboxes
                 self.populate_preset_combo(self.presetsBackground, "background")
                 self.populate_preset_combo(self.presetsAlign, "alignment")
                 self.populate_preset_combo(self.presetsCompress, "compression")
                 self.populate_preset_combo(self.presetsCrop, "crop")
 
+                # Setup credits page switcher
                 self.creditsLabel = self.findChild(QLabel, "creditsLabel")
                 self.creditsLabel.linkActivated.connect(self.on_creditsLabel_linkActivated)
 
                 self.selectedFolderLabel = self.findChild(QLabel, "selectedFolderLabel")
         
+        ## @brief populate a particular preset combo box with options
         def populate_preset_combo(self, combo, preset_type):
+
+                # Get all preset names
                 preset_names = [
                         name
                         for name in self.config.sections()
                         if self.config[name].get("type") == preset_type
                 ]
 
+                # Add the items to the presets and set the current index to be the placeholder
                 combo.clear()
                 combo.setPlaceholderText("Select a preset...")
                 combo.addItems(preset_names)
@@ -210,6 +223,7 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the select file button
         def on_selectFileButton_clicked(self):
                 
+                # Select a folder with file dialog
                 folder = QFileDialog.getExistingDirectory(
                         self,
                         "Select Folder",
@@ -219,22 +233,30 @@ class Widget(QWidget):
                 if not folder:
                         return
                 
+                # Set the selected folder and input FolderManager to this folder
                 self.selected_folder = folder
                 self.in_dir.set_path(folder)
 
+                # Set the output path to  be [folder]_processed in the same directory
                 input_path = Path(folder)
                 self.out_dir.set_path(str(input_path.parent / f"{input_path.name}_processed"))
+
                 self.update_folder_label()
 
                 self.scrollArea.setEnabled(True)
         
+        ## @brief update the select folder label
         def update_folder_label(self):
+                # Get the label
                 label = self.selectedFolderLabel
+
+                # shorten the path of the folder
                 shortened = label.fontMetrics().elidedText(
                         self.selected_folder,
                         Qt.TextElideMode.ElideMiddle,
                         label.width()
                 )
+                # Set the label text to the shortened text
                 label.setText(shortened)
                 label.setToolTip(self.selected_folder)
 
