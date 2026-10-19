@@ -89,11 +89,11 @@ class FolderManager:
             raise FolderError(self.path.name, 'folder is a file')
 
         if self.is_input:
-            if self.__count_images() == 0:
-                raise FolderError(self.path.name, 'folder does not contain any images to process')
+            if self.count_images() == 0:
+                raise FolderError(str(self.path), 'folder does not contain any images to process')
         else:
-            if self.__count_images() > 0:
-                raise FolderError(self.path.name, 'folder already contains images')
+            if self.count_images() > 0:
+                raise FolderError(str(self.path), 'folder already contains images')
 
         if self.__check_for_subdirs():
             raise FolderError(self.path.name, 'folder contains sub-folders')
@@ -106,7 +106,7 @@ class FolderManager:
     # THIS DOES NOT VALIDATE THE PATH FIRST! MAY RAISE ERRORS IF INVALID PATH
     #
     # @returns The number of valid images in this folder's path
-    def __count_images(self) -> int:
+    def count_images(self) -> int:
         assert self.path is not None
         count: int = 0
         for file_path in self.path.iterdir():
@@ -119,12 +119,17 @@ class FolderManager:
     ## @brief Writes some bytes to a given file_name in this folder
     def write_file(self, file_name: str, data: bytes) -> None:
         assert self.path is not None
+        if not self.path.exists():
+            self.path.mkdir()
+
         # file_name might be naughty and have a relative filepath
-        file_name = file_name.split('/')[-1]
+        # convert to and from Path type to cleanse it
+        file_path: Path = Path(file_name)
+        file_name = file_path.name
 
         file_path = Path.joinpath(self.path, file_name)
 
-        # open writer in exclusive-creation (x) for bytes (b), with buffering
+        # open writer in exclusive-creation (x) for bytes (b)
         writer: io.BufferedWriter = open(file_path, 'xb')
 
         writer.write(data)

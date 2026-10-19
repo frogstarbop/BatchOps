@@ -1,5 +1,4 @@
 import PIL.Image
-import io
 import os
 import sys
 
@@ -19,15 +18,14 @@ def cropping_test():
     height_ratio = int(sys.argv[3])
 
     image = PIL.Image.open(image_path)
-
-    cropped_image = cropping.cropping(image, width_ratio, height_ratio)
+    settings = cropping.CroppingSettings(
+        name='test',
+        width_ratio=width_ratio,
+        height_ratio=height_ratio
+    )
+    cropped_image = cropping.process(image, settings)
 
     cropped_image.save('test_cropped_image.jpg')
-
-
-
-
-
 
 if __name__ == "__main__":
     cropping_test()
