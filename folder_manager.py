@@ -119,6 +119,9 @@ class FolderManager:
     ## @brief Writes some bytes to a given file_name in this folder
     def write_file(self, file_name: str, data: bytes) -> None:
         assert self.path is not None
+        if not self.path.exists():
+            self.path.mkdir()
+
         # file_name might be naughty and have a relative filepath
         file_name = file_name.split('/')[-1]
 
