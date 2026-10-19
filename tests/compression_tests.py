@@ -11,7 +11,7 @@ outer_dir = os.path.dirname(current_dir)
 sys.path.append(outer_dir)
 
 # the module to test
-import compression
+import image_compression as compression
 
 # constants
 images_src_dir: str = 'images'

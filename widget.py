@@ -44,6 +44,11 @@ from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
 
+import processor
+from folder_manager import FolderManager
+from pathlib import Path
+from settings import Settings
+import image_compression as compression
 
 class Widget(QWidget):
         checkboxes = []
@@ -213,6 +218,52 @@ class Widget(QWidget):
                 self.processing_overlay.raise_()
                 self.processing_overlay.show()
 
+                self.start_processing()
+
+        ## @brief Starts the actual image processing
+        def start_processing(self):
+            # TEMP: remove when folder buttons used to set path
+            in_path: Path = Path('tests').joinpath('images').joinpath('bulk').joinpath('studio_huge')
+            out_path: Path = Path('tests').joinpath('images').joinpath('OUTPUTS')
+
+            # TODO: make/keep track of these from when user sets via the 'Choose input folder' button
+            in_dir: FolderManager = FolderManager('in', True)
+            out_dir: FolderManager = FolderManager('out', False)
+            in_dir.set_path(str(in_path))
+            out_dir.set_path(str(out_path))
+
+            compression_normal = compression.CompressionSettings(
+                # yoinked from compression_tests.py
+                name='standard',
+                max_file_size=600 * 1000,
+                preferred_widths=[1280, 1920, 2560],
+                min_height=720,
+                quality=75
+            )
+            compression_evil = compression.CompressionSettings(
+                # yoinked from compression_tests.py
+                name='evil',
+                max_file_size=1 * 1000,
+                preferred_widths=[1280, 1920, 2560],
+                min_height=720,
+                quality=90
+            )
+
+            # TODO: make settings object from the presets selected
+            # for now, copied from processor test
+            settings = Settings(
+                compression_enabled=True,
+                compression=compression_normal,
+                bg_removal_enabled=False,
+                bg_removal=None,
+                head_alignment_enabled=False,
+                head_alignment=None,
+                cropping_enabled=False,
+                cropping=None
+            )
+
+            # GET IT MOVING
+            processor.process(settings, in_dir, out_dir)
         # ------------- End Button interaction methods ----------------------------------------
 
 
