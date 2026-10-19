@@ -89,11 +89,11 @@ class FolderManager:
             raise FolderError(self.path.name, 'folder is a file')
 
         if self.is_input:
-            if self.__count_images() == 0:
-                raise FolderError(self.path.name, 'folder does not contain any images to process')
+            if self.count_images() == 0:
+                raise FolderError(str(self.path), 'folder does not contain any images to process')
         else:
-            if self.__count_images() > 0:
-                raise FolderError(self.path.name, 'folder already contains images')
+            if self.count_images() > 0:
+                raise FolderError(str(self.path), 'folder already contains images')
 
         if self.__check_for_subdirs():
             raise FolderError(self.path.name, 'folder contains sub-folders')
@@ -106,7 +106,7 @@ class FolderManager:
     # THIS DOES NOT VALIDATE THE PATH FIRST! MAY RAISE ERRORS IF INVALID PATH
     #
     # @returns The number of valid images in this folder's path
-    def __count_images(self) -> int:
+    def count_images(self) -> int:
         assert self.path is not None
         count: int = 0
         for file_path in self.path.iterdir():

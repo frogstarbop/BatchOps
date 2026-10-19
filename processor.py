@@ -118,7 +118,7 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
 
     # stats init
     mark_start_time()
-    stats_image_count_total = in_dir.__count_images()
+    stats_image_count_total = in_dir.count_images()
     stats_image_count_failed = 0
     stats_image_count_success = 0
 
