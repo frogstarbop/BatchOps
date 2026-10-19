@@ -117,14 +117,14 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     err_path: Path = out_dir.path.with_name(out_dir.path.name + '_errors')
     err_dir.set_path(str(err_path))
 
-    # setup the iterator over the input directory
-    in_iter = iter(in_dir)
-
     # stats init
     mark_start_time()
     stats_image_count_total = in_dir.count_images()
     stats_image_count_failed = 0
     stats_image_count_success = 0
+
+    # setup the iterator over the input directory
+    in_iter = iter(in_dir)
 
     # a thread which constantly tries to load/save files for the queues
     # instead of reading the whole input folder into the input queue immediately
