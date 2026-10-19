@@ -139,7 +139,9 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
         global stats_image_count_failed
         global stats_image_count_success
 
+        sent_stop = False
         while True:
+
             # prioritize outputting
             if not out_queue.empty():
                 item: tuple[str,bytes]|None = out_queue.get()
@@ -168,7 +170,7 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
                 err_dir.write_file(file_name, data)
                 stats_image_count_failed += 1
 
-            elif not in_queue.full():
+            elif not in_queue.full() and not sent_stop:
                 try:
                     image: PIL.Image.Image = next(in_iter)
                     stats_image_count_success += 1
@@ -176,8 +178,11 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
                     file_name = getattr(image, 'filename')
                     assert file_name is not None
                     print(f'file io: read image {file_name}')
+                    in_queue.put(image)
+
                 except StopIteration:
                     in_queue.put(fin_flag)
+                    sent_stop = True
             else:
                 # nothing to do, sleep for a short while
                 time.sleep(QUEUE_SHORT_SLEEP_SECONDS)
