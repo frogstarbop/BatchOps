@@ -48,6 +48,7 @@ from PySide6.QtCore import Qt
 class Widget(QWidget):
         checkboxes = []
         buttons = []
+        selected_folder = ""
         config = configparser.ConfigParser()
         config_preset_path = "presets.ini"
 
@@ -132,6 +133,8 @@ class Widget(QWidget):
 
                 self.creditsLabel = self.findChild(QLabel, "creditsLabel")
                 self.creditsLabel.linkActivated.connect(self.on_creditsLabel_linkActivated)
+
+                self.selectedFolderLabel = self.findChild(QLabel, "selectedFolderLabel")
         
         def populate_preset_combo(self, combo, preset_type):
                 preset_names = [
@@ -202,8 +205,30 @@ class Widget(QWidget):
 
         ## @brief Defines the interaction for the select file button
         def on_selectFileButton_clicked(self):
-                # TODO: Select folder
+                
+                folder = QFileDialog.getExistingDirectory(
+                        self,
+                        "Select Folder",
+                        self.selected_folder or os.path.expanduser("~")
+                )
+
+                if not folder:
+                        return
+                
+                self.selected_folder = folder
+                self.update_folder_label()
+
                 self.scrollArea.setEnabled(True)
+        
+        def update_folder_label(self):
+                label = self.selectedFolderLabel
+                shortened = label.fontMetrics().elidedText(
+                        self.selected_folder,
+                        Qt.TextElideMode.ElideMiddle,
+                        label.width()
+                )
+                label.setText(shortened)
+                label.setToolTip(self.selected_folder)
 
         ## @brief Defines the interaction for the start button
         def on_startButton_clicked(self):
