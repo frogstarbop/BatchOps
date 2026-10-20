@@ -257,6 +257,9 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
                 print(f'UNEXPECTED Exception {e} Occurred')
                 err_queue.put((image, e))
 
+    # TODO: fix deadlock bug on final images from input queue
+    subprocess_count = 1
+
     for i in range(subprocess_count):
         processing_thread: Process = Process(target=processing_looper, args=(in_queue, err_queue, out_queue, settings))
         processing_thread.start()
