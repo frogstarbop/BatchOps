@@ -145,6 +145,40 @@
       </spacer>
      </item>
      <item>
+      <layout class="QHBoxLayout" name="layoutAlign">
+       <item>
+        <widget class="QCheckBox" name="checkAlign">
+         <property name="text">
+          <string>Head Alignment</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QComboBox" name="presetsAlign">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <spacer name="verticalSpacer_2">
+       <property name="orientation">
+        <enum>Qt::Orientation::Vertical</enum>
+       </property>
+       <property name="sizeType">
+        <enum>QSizePolicy::Policy::Fixed</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>20</width>
+         <height>15</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
       <layout class="QHBoxLayout" name="layoutCrop">
        <item>
         <widget class="QCheckBox" name="checkCrop">
@@ -163,7 +197,7 @@
       </layout>
      </item>
      <item>
-      <spacer name="verticalSpacer_2">
+      <spacer name="verticalSpacer_3">
        <property name="orientation">
         <enum>Qt::Orientation::Vertical</enum>
        </property>
@@ -189,40 +223,6 @@
        </item>
        <item>
         <widget class="QComboBox" name="presetsCompress">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </item>
-     <item>
-      <spacer name="verticalSpacer_3">
-       <property name="orientation">
-        <enum>Qt::Orientation::Vertical</enum>
-       </property>
-       <property name="sizeType">
-        <enum>QSizePolicy::Policy::Fixed</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>20</width>
-         <height>15</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <layout class="QHBoxLayout" name="layoutAlign">
-       <item>
-        <widget class="QCheckBox" name="checkAlign">
-         <property name="text">
-          <string>Head Alignment</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QComboBox" name="presetsAlign">
          <property name="enabled">
           <bool>false</bool>
          </property>
