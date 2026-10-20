@@ -236,10 +236,10 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
             try:
                 data = process_image(image, settings)
 
-                out_name = Path(file_name).stem + 'jpg'
+                out_name = Path(file_name).stem + '.jpg'
 
                 # wait for a space in the output queue to put the image
-                out_queue.put((file_name, data))
+                out_queue.put((out_name, data))
             # handle each processing-step's errors
             except compression.CompressionError as e:
                 print(f'COMPRESSION error on file {file_name}: {e}')
@@ -261,7 +261,7 @@ def save_errored_image(image: PIL.Image.Image, err_dir: FolderManager) -> None:
     global stats_image_count_failed
     try:
         file_name: str = getattr(image, 'filename')
-        err_dir.write_file(Path(file_name).stem + 'jpg', backup_get_image_data(image))
+        err_dir.write_file(Path(file_name).stem + '.jpg', backup_get_image_data(image))
     except Exception as e:
         print(f"could not save the errored image: {e}")
     stats_image_count_failed += 1
