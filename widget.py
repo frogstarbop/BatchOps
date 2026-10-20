@@ -22,6 +22,11 @@
 #     widget.show()
 #     sys.exit(app.exec())
 # widget.py
+
+import multiprocessing 
+multiprocessing.freeze_support()
+
+
 import sys
 import os
 import configparser
@@ -236,7 +241,8 @@ class Widget(QWidget):
                 folder = QFileDialog.getExistingDirectory(
                         self,
                         "Select Folder",
-                        self.selected_folder or os.path.expanduser("~")
+                        self.selected_folder or os.path.expanduser("~"),
+                        QFileDialog.Option.ShowDirsOnly | QFileDialog.Option.DontUseNativeDialog
                 )
 
                 if not folder:
@@ -441,7 +447,8 @@ class Widget(QWidget):
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    widget = Widget()
-    widget.show()
-    sys.exit(app.exec())
+        
+        app = QApplication(sys.argv)
+        widget = Widget()
+        widget.show()
+        sys.exit(app.exec())
