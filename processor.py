@@ -266,7 +266,7 @@ def save_errored_image(image: PIL.Image.Image, err_dir: FolderManager) -> None:
         print(f"could not save the errored image: {e}")
     stats_image_count_failed += 1
 def backup_get_image_data(image: PIL.Image.Image) -> bytes:
-    if image.mode != RGB:
+    if image.mode != 'RGB':
         image = image.convert('RGB')
     
     # create an in-memory byte buffer than can be written to and read from

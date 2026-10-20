@@ -40,7 +40,8 @@ from PySide6.QtWidgets import (
         QSizePolicy,
         QComboBox,
         QLabel,
-        QMessageBox
+        QMessageBox,
+        QTextEdit
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
@@ -153,6 +154,8 @@ class Widget(QWidget):
                 self.creditsLabel.linkActivated.connect(self.on_creditsLabel_linkActivated)
 
                 self.selectedFolderLabel = self.findChild(QLabel, "selectedFolderLabel")
+
+                self.outputFolderNameTextbox = self.findChild(QTextEdit, "outputFolderNameTb")
         
         ## @brief populate a particular preset combo box with options
         def populate_preset_combo(self, combo, preset_type):
@@ -243,8 +246,8 @@ class Widget(QWidget):
                 self.in_dir.set_path(folder)
 
                 # Set the output path to  be [folder]_processed in the same directory
+                global input_path
                 input_path = Path(folder)
-                self.out_dir.set_path(str(input_path.parent / f"{input_path.name}_processed"))
 
                 self.update_folder_label()
 
@@ -268,6 +271,14 @@ class Widget(QWidget):
 
         ## @brief Defines the interaction for the start button
         def on_startButton_clicked(self):
+                global input_path
+
+                if len(self.outputFolderNameTextbox.toPlainText()) < 1:
+                        QMessageBox.warning(self, "You must select the name for your output folder", "You must enter a name for your output folder")
+                        return
+
+                self.out_dir.set_path(str(input_path.parent / f"{self.outputFolderNameTextbox.toPlainText()}"))
+                
                 try:
                         settings = self.build_settings()
                 except (ValueError, NotImplementedError) as error:
@@ -289,7 +300,6 @@ class Widget(QWidget):
                 self.processing_overlay.raise_()
                 self.processing_overlay.show()
 
-                self.start_processing()
         def update_start_enabled(self):
                 self.startButton.setEnabled(
                         self.in_dir.path is not None and self.check_any_checkbox_states()
