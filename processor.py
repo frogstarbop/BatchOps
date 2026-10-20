@@ -1,9 +1,10 @@
 import io
+import os
 import time
-import queue
 import PIL.Image
 import PIL.ImageOps
 import threading
+from multiprocessing import Process, Queue
 from pathlib import Path
 
 from settings import Settings
@@ -119,10 +120,10 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     fin_flag = None
 
     # for the queues, 'None' is an finish-flag
-    in_queue: queue.Queue[PIL.Image.Image|None] = queue.Queue(maxsize=8)
+    in_queue: Queue[PIL.Image.Image|None] = Queue(maxsize=8)
     # no max size for err_queue, should not fill up
-    err_queue: queue.Queue[tuple[PIL.Image.Image,Exception]] = queue.Queue()
-    out_queue: queue.Queue[tuple[str,bytes]|None] = queue.Queue(maxsize=8)
+    err_queue: Queue[tuple[PIL.Image.Image,Exception]] = Queue()
+    out_queue: Queue[tuple[str,bytes]|None] = Queue(maxsize=8)
 
     # setup a shared error output directory
     assert out_dir.path is not None
@@ -213,12 +214,8 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     file_IO_thread.start()
     print('file io thread started')
 
-    def processing_looper():
-        nonlocal in_queue
-        nonlocal err_queue
-        nonlocal out_queue
-        nonlocal fin_flag
-        nonlocal settings
+    def processing_looper(in_queue: Queue, err_queue: Queue, out_queue: Queue, settings: Settings):
+        print('processing looper: started')
 
         while True:
             image: PIL.Image.Image|None = in_queue.get()
@@ -226,7 +223,7 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
             # if receive fin flag, processing complete
             if image is None:
                 # put fin flag into output queue to let other threads know
-                out_queue.put(fin_flag)
+                out_queue.put(None)
                 print('processing looper: recieved fin flag')
                 return
 
@@ -250,11 +247,12 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
                 print(f'UNEXPECTED Exception {e} Occurred')
                 err_queue.put((image, e))
 
-    # TODO: make processing run on another process if threading not splitting across CPU cores
-    # TODO: make multiple of these run at once
-    processing_thread: threading.Thread = threading.Thread(target=processing_looper)
-    processing_thread.start()
-    print('processing thread started')
+    core_count = os.cpu_count() or 1
+    core_count = max(core_count - 2, 1)
+    for i in range(core_count):
+        processing_thread: Process = Process(target=processing_looper, args=(in_queue, err_queue, out_queue, settings))
+        processing_thread.start()
+    print('processing process started')
             
 ## @brief saves an image that failed processing into the error folder and counts it as failed
 def save_errored_image(image: PIL.Image.Image, err_dir: FolderManager) -> None:
