@@ -323,7 +323,7 @@ class Widget(QWidget):
                 alignment = load_step(self.checkboxAlign, "alignment", "head alignment")
 
                 if alignment is not None:
-                        model_path = Path(head_alignment.__file__).with_name("pose_landmarker_full.task")
+                        model_path = Path(head_alignment.__file__).parent / "bundled" / "pose_landmarker_full.task"
                         if not model_path.exists():
                                 raise ValueError(
                                         f"Head alignment needs {model_path.name} "
