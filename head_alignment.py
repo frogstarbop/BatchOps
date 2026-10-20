@@ -29,7 +29,7 @@ HEAD_LANDMARK_INDICES = range(11)
 # @returns A pose landmarker to pass to centre_head()
 # @raises FileNotFoundError If there is no model file at model_path
 def create_pose_landmarker(
-        model_path: Path(head_alignment.__file__).parent / "bundled" / "pose_landmarker_full.task",
+        model_path: Path = Path(__file__).parent / "bundled" / "pose_landmarker_full.task",
         min_confidence: float = 0.75,
 ) -> PoseLandmarker:
     if not model_path.exists():
