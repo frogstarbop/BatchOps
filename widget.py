@@ -28,6 +28,7 @@ import configparser
 from edit_presets import Widget as EditPresetsWidget
 from credits import Widget as CreditsWidget
 from progress_window import Widget as ProcessingWidget
+from folder_manager import FolderManager, FolderError
 from PySide6.QtWidgets import (
         QApplication, 
         QWidget, 
@@ -38,24 +39,35 @@ from PySide6.QtWidgets import (
         QScrollArea,
         QSizePolicy,
         QComboBox,
-        QLabel
+        QLabel,
+        QMessageBox,
+        QTextEdit
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
+from pathlib import Path
 
+import processor
+import preset_loader
+from settings import Settings
+import image_compression as compression
 
 class Widget(QWidget):
         checkboxes = []
         buttons = []
+        selected_folder = ""
         config = configparser.ConfigParser()
-        config_preset_path = "presets.ini"
+        config_preset_path = os.path.join(os.path.dirname(__file__), "presets.ini")
 
         def __init__(self, parent=None):
                 config_preset_path = "presets.ini"
                 super().__init__(parent)
+                self.in_dir = FolderManager("input", True)
+                self.out_dir = FolderManager("output", False)
                 self.comboBoxes = []
                 self.processing_overlay = None
+
                 # list of the current selected preset for each function
                 self.selected_presets = {
                         "background": None,
@@ -69,12 +81,14 @@ class Widget(QWidget):
                 ui_path = os.path.join(os.path.dirname(__file__), "form.ui")
                 self.ui = loader.load(ui_path, self)
 
+                # If the config already exists, then read it, else create a config file
                 if os.path.exists(self.config_preset_path):
                         self.config.read(self.config_preset_path)
                         print("config exists")
                 else:
                         with open(self.config_preset_path, "w") as configfile:
                                 self.config.write(configfile)
+
                 self.scrollArea = self.findChild(QScrollArea, "scrollArea")
                 # Add buttons to program
                 self.button_setup(self.buttons)
@@ -101,45 +115,59 @@ class Widget(QWidget):
         # ---------------------- UI Setup Methods --------------------------------------------
 
         def other_ui_setup(self):
+                # Setup background preset selector
                 self.presetsBackground = self.findChild(QComboBox, "presetsBackground")
                 self.comboBoxes.append(self.presetsBackground)
                 self.presetsBackground.currentTextChanged.connect(
                         lambda name: self.on_preset_changed("background", name)
                 )
-
+                
+                # Setup crop preset selector
                 self.presetsCrop = self.findChild(QComboBox, "presetsCrop")
                 self.comboBoxes.append(self.presetsCrop)
                 self.presetsCrop.currentTextChanged.connect(
                         lambda name: self.on_preset_changed("crop", name)
                 )
 
+                # Setup compress preset selector
                 self.presetsCompress = self.findChild(QComboBox, "presetsCompress")
                 self.comboBoxes.append(self.presetsCompress)
                 self.presetsCompress.currentTextChanged.connect(
                         lambda name: self.on_preset_changed("compression", name)
                 )
 
+                # Setup align preset selector
                 self.presetsAlign = self.findChild(QComboBox, "presetsAlign")
                 self.comboBoxes.append(self.presetsAlign)
                 self.presetsAlign.currentTextChanged.connect(
                         lambda name: self.on_preset_changed("alignment", name)
                 )
 
+                # Populate comboboxes
                 self.populate_preset_combo(self.presetsBackground, "background")
                 self.populate_preset_combo(self.presetsAlign, "alignment")
                 self.populate_preset_combo(self.presetsCompress, "compression")
                 self.populate_preset_combo(self.presetsCrop, "crop")
 
+                # Setup credits page switcher
                 self.creditsLabel = self.findChild(QLabel, "creditsLabel")
                 self.creditsLabel.linkActivated.connect(self.on_creditsLabel_linkActivated)
+
+                self.selectedFolderLabel = self.findChild(QLabel, "selectedFolderLabel")
+
+                self.outputFolderNameTextbox = self.findChild(QTextEdit, "outputFolderNameTb")
         
+        ## @brief populate a particular preset combo box with options
         def populate_preset_combo(self, combo, preset_type):
+
+                # Get all preset names
                 preset_names = [
                         name
                         for name in self.config.sections()
                         if self.config[name].get("type") == preset_type
                 ]
 
+                # Add the items to the presets and set the current index to be the placeholder
                 combo.clear()
                 combo.setPlaceholderText("Select a preset...")
                 combo.addItems(preset_names)
@@ -202,17 +230,108 @@ class Widget(QWidget):
 
         ## @brief Defines the interaction for the select file button
         def on_selectFileButton_clicked(self):
-                # TODO: Select folder
+                
+                # Select a folder with file dialog
+                folder = QFileDialog.getExistingDirectory(
+                        self,
+                        "Select Folder",
+                        self.selected_folder or os.path.expanduser("~")
+                )
+
+                if not folder:
+                        return
+                
+                # Set the selected folder and input FolderManager to this folder
+                self.selected_folder = folder
+                self.in_dir.set_path(folder)
+
+                # Set the output path to  be [folder]_processed in the same directory
+                global input_path
+                input_path = Path(folder)
+
+                self.update_folder_label()
+
                 self.scrollArea.setEnabled(True)
+                self.update_start_enabled()
+        
+        ## @brief update the select folder label
+        def update_folder_label(self):
+                # Get the label
+                label = self.selectedFolderLabel
+
+                # shorten the path of the folder
+                shortened = label.fontMetrics().elidedText(
+                        self.selected_folder,
+                        Qt.TextElideMode.ElideMiddle,
+                        label.width()
+                )
+                # Set the label text to the shortened text
+                label.setText(shortened)
+                label.setToolTip(self.selected_folder)
 
         ## @brief Defines the interaction for the start button
         def on_startButton_clicked(self):
+                global input_path
+
+                if len(self.outputFolderNameTextbox.toPlainText()) < 1:
+                        QMessageBox.warning(self, "You must select the name for your output folder", "You must enter a name for your output folder")
+                        return
+
+                self.out_dir.set_path(str(input_path.parent / f"{self.outputFolderNameTextbox.toPlainText()}"))
+                
+                try:
+                        settings = self.build_settings()
+                except (ValueError, NotImplementedError) as error:
+                        QMessageBox.warning(self, "Cannot start", str(error))
+                        return
+                
+                try:
+                        self.in_dir.validate()
+                        self.out_dir.validate()
+                except FolderError as error:
+                        QMessageBox.warning(self, "Folder problem", f"{error.path}: {error}")
+                        return
+                
+                processor.process(settings, self.in_dir, self.out_dir)
+                
                 self.processing_overlay = ProcessingWidget(self)
 
                 self.processing_overlay.setGeometry(self.rect())
                 self.processing_overlay.raise_()
                 self.processing_overlay.show()
 
+        def update_start_enabled(self):
+                self.startButton.setEnabled(
+                        self.in_dir.path is not None and self.check_any_checkbox_states()
+                )
+
+        def build_settings(self) -> Settings:
+                # Error when headalignment as it doesn't exist yet
+                if self.checkboxAlign.checkState() == Qt.CheckState.Checked:
+                        raise ValueError("Head alignment isn't available yet")
+                
+                def load_step(checkbox, preset_type, step_name):
+                        if checkbox.checkState() != Qt.CheckState.Checked:
+                                return None
+                        preset_name = self.selected_presets[preset_type]
+                        if preset_name is None:
+                                raise ValueError(f"select a {step_name} preset first")
+                        return preset_loader.load_settings(self.config, preset_name)
+                background = load_step(self.checkboxBackground, "background", "background removal")
+                cropping = load_step(self.checkboxCrop, "crop", "crop")
+                compression = load_step(self.checkboxCompress, "compression", "compression")
+
+                return Settings(
+                        compression_enabled = compression is not None,
+                        compression = compression,
+                        head_alignment_enabled = False,
+                        head_alignment=None,
+                        cropping_enabled = cropping is not None,
+                        cropping = cropping,
+                        bg_removal_enabled= background is not None,
+                        bg_removal=background
+                )
+       
         # ------------- End Button interaction methods ----------------------------------------
 
 
@@ -221,10 +340,7 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the background checkbox
         def on_checkboxBackground_stateChanged(self, state):
                 print(f"Background check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
-                if(self.check_any_checkbox_states()):
-                        self.startButton.setEnabled(True)
-                else:
-                        self.startButton.setEnabled(False)
+                self.update_start_enabled()
 
                 if (state == Qt.CheckState.Checked):
                         self.presetsBackground.setEnabled(True)
@@ -234,10 +350,7 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the compress checkbox
         def on_checkboxCompress_stateChanged(self, state):
                 print(f"Compress check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
-                if(self.check_any_checkbox_states()):
-                        self.startButton.setEnabled(True)
-                else:
-                        self.startButton.setEnabled(False)
+                self.update_start_enabled()
 
                 if (state == Qt.CheckState.Checked):
                         self.presetsCompress.setEnabled(True)
@@ -247,10 +360,7 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the crop checkbox
         def on_checkboxCrop_stateChanged(self, state):
                 print(f"Crop check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
-                if(self.check_any_checkbox_states()):
-                        self.startButton.setEnabled(True)
-                else:
-                        self.startButton.setEnabled(False)
+                self.update_start_enabled()
 
                 if (state == Qt.CheckState.Checked):
                         self.presetsCrop.setEnabled(True)
@@ -260,10 +370,7 @@ class Widget(QWidget):
         ## @brief Defines the interaction for the align checkbox
         def on_checkboxAlign_stateChanged(self, state):
                 print(f"Align check state: {"Checked" if state == Qt.CheckState.Checked else "Unchecked"}")
-                if(self.check_any_checkbox_states()):
-                        self.startButton.setEnabled(True)
-                else:
-                        self.startButton.setEnabled(False)
+                self.update_start_enabled()
 
                 if (state == Qt.CheckState.Checked):
                         self.presetsAlign.setEnabled(True)
@@ -272,7 +379,7 @@ class Widget(QWidget):
 
         # ------------- End Checkbox interaction methods ----------------------------------------
         def on_preset_changed(self, preset_type, preset_name):
-                if preset_name == "None":
+                if not preset_name or preset_name == "None":
                         self.selected_presets[preset_type] = None
                 else:
                         self.selected_presets[preset_type] = preset_name

@@ -2,19 +2,22 @@ from dataclasses import dataclass
 import numpy as np
 import PIL.Image
 import PIL.ImageFilter
-from rembg import remove
+import rembg
 from rembg.sessions.base import BaseSession
 
 ## @brief A container for all the settings for replacing an image's background
 @dataclass
 class BackgroundSettings:
     name: str
+# @param background_rgb The (red, green, blue) background colour, 0-255 each
 
-    background_rgb: list[int]
+    background_rgb: tuple[int, int, int]
 
+    ## A key of SHADOW_PRESETS: soft, natural, deep or dramatic
     intensity: str 
 
-    white_pt: float
+    ## The brightness treated as unshaded, estimated from the photo if None
+    white_pt: float | None
 
     model_name: str
 
@@ -193,7 +196,7 @@ def extract_mask(image: PIL.Image.Image, session: BaseSession) -> np.ndarray:
             f"session must be created with rembg.new_session(<model name>), got {type(session).__name__}"
         )
 
-    mask_image = remove(image, session=session, only_mask=True)
+    mask_image = rembg.remove(image, session=session, only_mask=True)
     return np.array(mask_image, dtype=np.float32) / MAX_PIXEL_VALUE
 
 
@@ -239,22 +242,25 @@ def composite(
 ## @brief Replaces an image's background with a solid colour, keeping the original shadows
 #
 # @param image The portrait to process, already upright (EXIF rotation is not applied here)
-# @param background_rgb The (red, green, blue) background colour, 0-255 each
-# @param session A rembg session, created by the caller with rembg.new_session()
-# @param intensity A key of SHADOW_PRESETS: soft, natural, deep or dramatic
-# @param white_pt The brightness treated as unshaded, estimated from the photo if None
+# @param settings The background removal settings to apply
 # @returns The new RGB image, same size as the input
 # @raises ValueError If the colour is invalid, the image has transparency, intensity is unknown,
 #                    or white_pt cannot be estimated or is not above the preset's black point
 #                    and at most 1.0
 # @raises TypeError If session is not a rembg session
-def replace_background(
-    image: PIL.Image.Image,
-    background_rgb: tuple[int, int, int],
-    session: BaseSession,
-    intensity: str = DEFAULT_INTENSITY,
-    white_pt: float | None = None,
-) -> PIL.Image.Image:
+def process(image: PIL.Image.Image, settings: BackgroundSettings) -> PIL.Image.Image:
+    background_rgb: tuple[int, int, int] = settings.background_rgb
+    intensity: str = settings.intensity
+    white_pt: float | None = settings.white_pt
+
+    # the preset editor can't store None, so 0 (or less) also means estimate it from the photo
+    if white_pt is not None and white_pt <= 0:
+        white_pt = None
+    # TODO: use model field in settings
+
+    # TODO: initialize session only once during processing instead of per-image
+    session: BaseSession = rembg.new_session()
+
     validate_rgb(background_rgb)
     validate_opaque(image)
     # looked up now so a bad intensity fails before the slow matting step

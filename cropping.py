@@ -11,9 +11,11 @@ class CroppingSettings:
     width_ratio: int
     height_ratio: int
 
-def cropping(image: PIL.Image.Image, width_ratio: int, height_ratio: int) -> PIL.Image.Image:
+def process(image: PIL.Image.Image, settings: CroppingSettings) -> PIL.Image.Image:
 
     original_width, original_height = image.size;
+    width_ratio: int = settings.width_ratio
+    height_ratio: int = settings.height_ratio
 
     # checks if the ratio of orignaal image has ratio resulting in more width thus width will have to be cut
     if (original_width / original_height) > (width_ratio / height_ratio):

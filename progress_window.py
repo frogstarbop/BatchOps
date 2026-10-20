@@ -10,13 +10,16 @@ from PySide6.QtWidgets import (
     QPushButton,
     QLabel,
     QTextBrowser,
-    QProgressBar
+    QProgressBar,
+    QMessageBox
 )
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtCore import Qt
+from PySide6.QtCore import (Qt, QTimer)
 from PySide6.QtGui import QPixmap
 
 from PIL import Image, ImageFilter
+
+import processor
 
 class Widget (QWidget):
     def __init__(self, parent = None):
@@ -39,7 +42,10 @@ class Widget (QWidget):
 
         if parent is not None:
             self.create_blurred_background(parent)
-    
+
+        self.update_timer = QTimer(self)
+        self.update_timer.timeout.connect(self.update_frame)
+        self.update_timer.start(1000 // 30) # TODO: match monitor frame rate
 
     def ui_connect(self):
 
@@ -53,19 +59,8 @@ class Widget (QWidget):
 
         self.statusText = self.findChild(QTextBrowser, "statusTextBrowser")
 
-        # ----------DEBUG--------------
-        self.debugExit = self.findChild(QPushButton, "debugExit")
-        self.debugExit.clicked.connect(self.on_debugExit_clicked)
-        
-
     def on_closeButton_clicked(self):
-        print("close button clicked")
-
-
-    # ---------DEBUG----------------
-    def on_debugExit_clicked(self):
         self.close()
-    # ---------DEBUG----------------
 
     def create_blurred_background(self, parent):
         if parent is None:
@@ -106,3 +101,57 @@ class Widget (QWidget):
         
         self.background.setPixmap(blurred_pixmap)
         self.background.setScaledContents(True)
+
+    # ----------- PROGRESS INFO ----------
+    def get_status_text(self) -> str:
+        total = processor.get_images_total()
+        success = processor.get_images_success()
+        failed = processor.get_images_failed()
+        not_started = total - (success + failed)
+        return f'Not Started:\t{not_started}\nSuccessful:\t{success}\nFailed:\t\t{failed}\nTotal:\t\t{total}'
+
+    def is_finished(self) -> bool:
+        total = processor.get_images_total()
+        done = processor.get_images_success() + processor.get_images_failed()
+        return total > 0 and done >= total
+
+    def get_time_remaining_text(self) -> str:
+        time_left = processor.get_estimated_time_left()
+        if time_left < 0:
+            return 'Estimating...'
+        if time_left < 60:
+            return f'{time_left} seconds'
+        time_left //= 60
+        if time_left < 60:
+            return f'{time_left} minutes'
+        time_left //= 60
+        if time_left < 24:
+            return f'{time_left} hours'
+        return f'{time_left} days'
+
+    # def rotate_gears(self) -> None:
+        # angle = 3.0
+        # transform = QTransform().rotate(angle)
+        # rotated_pixmap = self.largeGearPixMap.transformed(transform, Qt.SmoothTransformation)
+        # self.largeGear.setPixmap(rotated_pixmap)
+
+    ## @brief For polling processing progress and updating display
+    def update_frame(self):
+        finished = self.is_finished()
+        
+        percent = int( processor.get_progress() * 100)
+        self.progressBar.setValue(percent)
+        self.statusText.setPlainText(self.get_status_text())
+        
+        if finished:
+            self.update_timer.stop()
+            self.timeRemaining.setText('Finished!')
+            self.closeButton.setEnabled(True)
+            QMessageBox.information(self, "Processing completed!", "Your images are ready!")
+            return
+        
+        self.timeRemaining.setText(self.get_time_remaining_text())
+        # self.rotate_gears()
+        self.repaint()
+    
+

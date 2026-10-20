@@ -153,19 +153,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <bool>true</bool>
    </property>
   </widget>
-  <widget class="QPushButton" name="debugExit">
-   <property name="geometry">
-    <rect>
-     <x>960</x>
-     <y>40</y>
-     <width>181</width>
-     <height>111</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>debugExit</string>
-   </property>
-  </widget>
   <widget class="QLabel" name="gearIcon">
    <property name="geometry">
     <rect>
