@@ -58,7 +58,7 @@ def get_estimated_time_left() -> int:
     delta_time = get_now() - stats_time_started
 
     progress = get_progress()
-    if progress < 0.01:
+    if progress < 0.00001:
         return -1
     total_time = delta_time / progress
     time_left = total_time - delta_time
