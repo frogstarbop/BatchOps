@@ -6,6 +6,13 @@ from PIL import Image
 from mediapipe.tasks.python import BaseOptions
 from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
 
+from dataclasses import dataclass
+
+@dataclass
+class HeadAlignmentSettings:
+    head_x: float
+    head_y: float
+
 # Pose landmarks 0-10 are the head: nose, both eyes (inner/centre/outer), both ears and both mouth corners.
 HEAD_LANDMARK_INDICES = range(11)
 
@@ -135,16 +142,17 @@ def reframe(image_array: np.ndarray, frame: tuple[int, int, int, int]) -> Image.
 # @param head_y Vertical head placement as a fraction of output height from bottom (default 0.85)
 # @returns The new RGB PIL image, with the same aspect ratio as the input
 # @raises ValueError If there is not exactly one person, or the head is too low to frame
-def centre_head(
-        image: Image.Image,
-        landmarker: PoseLandmarker,
-        head_x: float = 0.5,
-        head_y: float = 0.85,
-) -> Image.Image:
+def process(image: Image.Image, settings: HeadAlignmentSettings) -> Image.Image:
+    head_x = settings.head_x
+    head_y = settings.head_y
+
     # FIX: Shave 2 pixels off the perimeter to destroy any edge artifacts (like a microscopic
     # white border or sharpening halo) before it gets mathematically reflected.
     width, height = image.size
     image = image.crop((2, 2, width - 2, height - 2))
+
+    # TODO: dont create this every image
+    landmarker = create_pose_landmarker()
 
     image_array = np.asarray(image.convert("RGB"))
 

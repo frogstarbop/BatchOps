@@ -1,13 +1,9 @@
 from image_compression import CompressionSettings
 from bg_replacer import BackgroundSettings
 from cropping import CroppingSettings
+from head_alignment import HeadAlignmentSettings
 
 from dataclasses import dataclass
-
-# TEMPORARY PLACEHOLDERS
-@dataclass
-class HeadAlignmentSettings:
-    beans: int
 
 ## @brief A container for all the settings for compressing an image
 @dataclass
