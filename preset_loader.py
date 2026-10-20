@@ -1,6 +1,7 @@
 import image_compression as compression
 import cropping
 import bg_replacer as background
+import head_alignment
 
 ## @brief get a CompressionSettings object for a given preset
 def get_compression_settings(config, preset_name):
@@ -37,11 +38,19 @@ def get_background_settings(config, preset_name):
         model_name=preset["model_name"]
     )
 
+def get_head_alignment_settings(config, preset_name):
+    preset = config[preset_name]
+    return head_alignment.HeadAlignmentSettings(
+        name = preset_name,
+        head_x = preset.getfloat("head_x", fallback = 0.5),
+        head_y = preset.getfloat("head_y", fallback = 0.85)
+    )
 
 LOADERS = {
     "compression": get_compression_settings,
     "crop": get_cropping_settings,
-    "background": get_background_settings
+    "background": get_background_settings,
+    "alignment": get_head_alignment_settings
 }
 
 ## @brief get the settings object for any preset, based on its type in the config
