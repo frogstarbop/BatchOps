@@ -10,7 +10,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QLabel,
     QTextBrowser,
-    QProgressBar
+    QProgressBar,
+    QMessageBox
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtCore import (Qt, QTimer)
@@ -58,19 +59,8 @@ class Widget (QWidget):
 
         self.statusText = self.findChild(QTextBrowser, "statusTextBrowser")
 
-        # ----------DEBUG--------------
-        self.debugExit = self.findChild(QPushButton, "debugExit")
-        self.debugExit.clicked.connect(self.on_debugExit_clicked)
-        
-
     def on_closeButton_clicked(self):
         self.close()
-
-
-    # ---------DEBUG----------------
-    def on_debugExit_clicked(self):
-        self.close()
-    # ---------DEBUG----------------
 
     def create_blurred_background(self, parent):
         if parent is None:
@@ -157,6 +147,7 @@ class Widget (QWidget):
             self.update_timer.stop()
             self.timeRemaining.setText('Finished!')
             self.closeButton.setEnabled(True)
+            QMessageBox.information(self, "Processing completed!", "Your images are ready!")
             return
         
         self.timeRemaining.setText(self.get_time_remaining_text())
