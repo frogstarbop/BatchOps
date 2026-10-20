@@ -10,6 +10,7 @@ from settings import Settings
 from folder_manager import FolderManager, FolderError
 import image_compression as compression
 import bg_replacer as bg_removal
+import head_alignment
 import cropping
 
 QUEUE_WAITING_SLEEP_SECONDS: float = 0.05
@@ -84,8 +85,7 @@ def process_image(image: PIL.Image.Image, settings: Settings) -> bytes:
 
     if settings.head_alignment_enabled:
         assert settings.head_alignment is not None
-        # TODO: uncomment when head_alignment implemented
-        # image = head_alignment.process(image, settings.head_alignment)
+        image = head_alignment.process(image, settings.head_alignment)
 
     if settings.cropping_enabled:
         assert settings.cropping is not None
