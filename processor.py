@@ -243,10 +243,10 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
             try:
                 data = process_image(image, settings)
 
-                out_name = Path(file_name).stem + 'jpg'
+                out_name = Path(file_name).stem + '.jpg'
 
                 # wait for a space in the output queue to put the image
-                out_queue.put((file_name, data))
+                out_queue.put((out_name, data))
             # handle each processing-step's errors
             except compression.CompressionError as e:
                 print(f'COMPRESSION error on file {file_name}: {e}')

@@ -52,6 +52,7 @@ import processor
 import preset_loader
 from settings import Settings
 import image_compression as compression
+import head_alignment
 
 class Widget(QWidget):
         checkboxes = []
@@ -307,8 +308,7 @@ class Widget(QWidget):
 
         def build_settings(self) -> Settings:
                 # Error when headalignment as it doesn't exist yet
-                if self.checkboxAlign.checkState() == Qt.CheckState.Checked:
-                        raise ValueError("Head alignment isn't available yet")
+                
                 
                 def load_step(checkbox, preset_type, step_name):
                         if checkbox.checkState() != Qt.CheckState.Checked:
@@ -320,12 +320,20 @@ class Widget(QWidget):
                 background = load_step(self.checkboxBackground, "background", "background removal")
                 cropping = load_step(self.checkboxCrop, "crop", "crop")
                 compression = load_step(self.checkboxCompress, "compression", "compression")
+                alignment = load_step(self.checkboxAlign, "alignment", "head alignment")
 
+                if alignment is not None:
+                        model_path = Path(head_alignment.__file__).parent / "bundled" / "pose_landmarker_full.task"
+                        if not model_path.exists():
+                                raise ValueError(
+                                        f"Head alignment needs {model_path.name} "
+                                        "in the same folder as head_alignment.py"
+                                )
                 return Settings(
                         compression_enabled = compression is not None,
                         compression = compression,
-                        head_alignment_enabled = False,
-                        head_alignment=None,
+                        head_alignment_enabled = alignment is not None,
+                        head_alignment=alignment,
                         cropping_enabled = cropping is not None,
                         cropping = cropping,
                         bg_removal_enabled= background is not None,
