@@ -4,7 +4,7 @@ import mediapipe as mp
 import numpy as np
 from PIL import Image
 from mediapipe.tasks.python import BaseOptions
-from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
+from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions
 
 from dataclasses import dataclass
 
@@ -18,14 +18,13 @@ HEAD_LANDMARK_INDICES = range(11)
 
 
 ## @brief Creates a MediaPipe pose landmarker
-#
-# The model file must already be on disk, nothing is downloaded. The caller owns the
-# landmarker and should close() it when finished. It is loaded once and reused so that
-# many images can be processed without reloading the model.
+# This is the model that is used to find a person from an image,
+# creating landmark points that can be used to figure out the position of a head.
 #
 # @param model_path Path to a pose landmarker .task model file (lite, full or heavy)
-# @param min_confidence Pose detections / presence scoring below this are ignored (0.0-1.0)
-# @returns A pose landmarker to pass to centre_head()
+# @param min_confidence Detections and presence scoring below this are ignored (0.0-1.0)
+#
+# @returns A pose landmarker to pass to process()
 # @raises FileNotFoundError If there is no model file at model_path
 def create_pose_landmarker(
         model_path: Path = Path(__file__).with_name("pose_landmarker_full.task"),
@@ -36,7 +35,6 @@ def create_pose_landmarker(
 
     options = PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=str(model_path)),
-        running_mode=RunningMode.IMAGE,
         num_poses=2,  # Only need to know whether there is more than one person
         min_pose_detection_confidence=min_confidence,
         min_pose_presence_confidence=min_confidence,
@@ -52,24 +50,48 @@ def create_pose_landmarker(
 # @param landmarker A pose landmarker, created by create_pose_landmarker()
 # @returns The (x, y) coordinates of the head's centre in pixels
 # @raises ValueError If there is not exactly one person in the image
-def locate_head_centre(image_array: np.ndarray, landmarker: PoseLandmarker) -> tuple[float, float]:
+def calculate_head_coords(image_array: np.ndarray, landmarker: PoseLandmarker) -> tuple[float, float]:
     image_h, image_w = image_array.shape[:2]
+
+    # Mediapipe gets the pose landmarks
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_array)
-    poses = landmarker.detect(mp_image).pose_landmarks
 
-    if len(poses) != 1:
-        raise ValueError(f"Expected exactly 1 person, found {len(poses)}")
+    # Detect poses using media pipe on the image
+    detection_result = landmarker.detect(mp_image)
 
-    head = [poses[0][i] for i in HEAD_LANDMARK_INDICES]
+    # List of detected pose landmark sets
+    detected_poses = detection_result.pose_landmarks
 
-    # Landmarks are normalised to [0, 1] but can fall slightly outside the image, so clamp
-    xs: list[float] = [(lm.x or 0.0) * image_w for lm in head]
-    ys: list[float] = [(lm.y or 0.0) * image_h for lm in head]
+    # Total count of detected poses
+    num_poses = len(detected_poses)
 
-    left, top = max(min(xs), 0.0), max(min(ys), 0.0)
-    right, bottom = min(max(xs), float(image_w)), min(max(ys), float(image_h))
+    # Exactly one person must be present
+    if num_poses != 1:
+        # Raise error if 0 or multiple people are detected
+        raise ValueError(f"Expected exactly 1 person, found {num_poses}")
 
-    return (left + right) / 2.0, (top + bottom) / 2.0
+    # Unpack the single pose list directly out of the 1-element detected_poses list
+    [pose] = detected_poses
+
+    # Slice the first 11 landmarks corresponding to facial features (indices 0-10)
+    head_landmarks = pose[:11]
+
+    # Convert normalized X coordinates (0.0 to 1.0) into absolute pixel coordinates
+    landmark_x_coords: list[float] = [(lm.x or 0.0) * image_w for lm in head_landmarks]
+
+    # Convert normalized Y coordinates (0.0 to 1.0) into absolute pixel coordinates
+    landmark_y_coords: list[float] = [(lm.y or 0.0) * image_h for lm in head_landmarks]
+
+    # Find max and min landmark coords
+    box_left = min(landmark_x_coords)
+    box_right = max(landmark_x_coords)
+    box_top = min(landmark_y_coords)
+    box_bottom = max(landmark_y_coords)
+
+    # Return the centre coords
+    x_center = (box_left + box_right) / 2.0
+    y_center = (box_top + box_bottom) / 2.0
+    return x_center, y_center
 
 
 ## @brief Calculates the target frame for the output image
@@ -159,7 +181,7 @@ def process(image: Image.Image, settings: HeadAlignmentSettings) -> Image.Image:
     # Extract width and height straight from the array shape (H, W, Channels)
     image_size = (image_array.shape[1], image_array.shape[0])
 
-    head_centre = locate_head_centre(image_array, landmarker)
-    frame = compute_target_frame(image_size, head_centre, head_x, head_y)
+    head_coords = calculate_head_coords(image_array, landmarker)
+    frame = compute_target_frame(image_size, head_coords, head_x, head_y)
 
     return reframe(image_array, frame)
