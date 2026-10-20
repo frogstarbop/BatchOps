@@ -27,7 +27,7 @@ standard_align_preset = head_alignment.HeadAlignmentSettings(
 
 bad_reflect_preset = head_alignment.HeadAlignmentSettings(
     head_x = 0.5,
-    head_y = 0.05,
+    head_y = 0.58,
 )
 
 
@@ -61,5 +61,35 @@ def alignment_test():
             except Exception as e:
                 print(f"Skipped {filename}: {e}")
 
+
+# Takes files from the jpeg directory and outputs the result to the output directory
+def fail_alignment_test():
+    # Ensure the output directory exists
+    os.makedirs(images_output_dir, exist_ok=True)
+
+    with head_alignment.create_pose_landmarker() as landmarker:
+        for filename in os.listdir(images_jpg_dir):
+
+            input_path = os.path.join(images_jpg_dir, filename)
+            output_path = os.path.join(images_output_dir, filename)
+
+            # Skip subdirectories or non-file entries if any exist inside jpeg/
+            if not os.path.isfile(input_path):
+                continue
+
+            try:
+                image = PIL.Image.open(input_path)
+                image = PIL.ImageOps.exif_transpose(image)
+
+                # Process alignment
+                result = head_alignment.process(image, bad_reflect_preset)
+                result.save(output_path)
+                print(f"Processed: {filename}")
+
+            except Exception as e:
+                print(f"Skipped {filename}: {e}")
+
+
 if __name__ == "__main__":
     alignment_test()
+    fail_alignment_test()
