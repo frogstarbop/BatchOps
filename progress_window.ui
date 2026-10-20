@@ -147,7 +147,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string/>
    </property>
    <property name="pixmap">
-    <pixmap>../../../Downloads/image.png</pixmap>
+    <pixmap>bundled/logo.png</pixmap>
    </property>
    <property name="scaledContents">
     <bool>true</bool>
@@ -166,7 +166,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string/>
    </property>
    <property name="pixmap">
-    <pixmap>../../../Downloads/4844444.png</pixmap>
+    <pixmap>bundled/gear_large.png</pixmap>
    </property>
    <property name="scaledContents">
     <bool>true</bool>
