@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 @dataclass
 class HeadAlignmentSettings:
+    name: str
     head_x: float
     head_y: float
 
