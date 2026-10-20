@@ -249,6 +249,11 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
 
     core_count = os.cpu_count() or 1
     core_count = max(core_count - 2, 1)
+
+    # these use too much RAM to have multiple processing at once
+    if settings.bg_removal_enabled or settings.head_alignment_enabled:
+        core_count = 1
+
     for i in range(core_count):
         processing_thread: Process = Process(target=processing_looper, args=(in_queue, err_queue, out_queue, settings))
         processing_thread.start()
