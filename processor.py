@@ -140,6 +140,14 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     # setup the iterator over the input directory
     in_iter = iter(in_dir)
 
+    # pre-calculate how many subprocesses will be made
+    subprocess_count = os.cpu_count() or 1
+    subprocess_count = max(subprocess_count - 2, 1)
+
+    # these use too much RAM to have multiple processing at once
+    if settings.bg_removal_enabled or settings.head_alignment_enabled:
+        subprocess_count = 1
+
     # a thread which constantly tries to load/save files for the queues
     # instead of reading the whole input folder into the input queue immediately
     # also handles updating stat image counts
@@ -150,23 +158,40 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
         nonlocal fin_flag
         nonlocal in_iter
         nonlocal err_dir
+        nonlocal subprocess_count
         global stats_image_count_failed
         global stats_image_count_success
 
-        sent_stop = False
-        while True:
+        print('file io: starting')
 
+        def flush_errs():
+            nonlocal err_queue
+            nonlocal err_dir
+            while not err_queue.empty():
+                print('file io: handling error1')
+                image: PIL.Image.Image
+                err: Exception
+                print('file io: handling error')
+                image, err = err_queue.get()
+                save_errored_image(image, err, err_dir)
+
+        sent_stop: bool = False
+        recv_stops: int = 0
+
+        while True:
+            flush_errs()
             # prioritize outputting
             if not out_queue.empty():
                 item: tuple[str,bytes]|None = out_queue.get()
 
+                # stop once all processes put a fin flag in queue
                 if item == None:
-                    # stop once all processes put a fin flag in queue
-                    # TODO: count that there have been N fin flags
-                    while not err_queue.empty():
-                        save_errored_image(err_queue.get()[0], err_dir)
-                    print('file io looper received fin, stopping')
-                    return
+                    recv_stops += 1
+                    if recv_stops >= subprocess_count:
+                        print('file io looper received fin, stopping')
+                        flush_errs()
+                        return
+                    continue
 
                 file_name: str = item[0]
                 data: bytes = item[1]
@@ -178,22 +203,7 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
                 except Exception as e:
                     print(f"file io: failed to write {file_name}:{e}")
                     stats_image_count_failed += 1
-            elif not err_queue.empty():
-
-                save_errored_image(err_queue.get()[0], err_dir)
-                # item2: tuple[PIL.Image.Image,Exception] = err_queue.get()
-                # image: PIL.Image.Image = item2[0]
-                # error: Exception = item2[1]
-
-                # file_name: str = getattr(image, 'filename')
-                # assert file_name is not None
-                # data: bytes = backup_get_image_data(image)
-
-                # # TODO: save each type of processing-step error to a different dir
-                # print(f'saving errored image to {str(err_dir)}')
-                # err_dir.write_file(file_name, data)
-                # stats_image_count_failed += 1
-
+             
             elif not in_queue.full() and not sent_stop:
                 try:
                     image: PIL.Image.Image = next(in_iter)
@@ -202,9 +212,9 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
                     assert file_name is not None
                     print(f'file io: read image {file_name}')
                     in_queue.put(image)
-
                 except StopIteration:
-                    in_queue.put(fin_flag)
+                    for i in range(subprocess_count):
+                        in_queue.put(fin_flag)
                     sent_stop = True
             else:
                 # nothing to do, sleep for a short while
@@ -247,24 +257,20 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
                 print(f'UNEXPECTED Exception {e} Occurred')
                 err_queue.put((image, e))
 
-    core_count = os.cpu_count() or 1
-    core_count = max(core_count - 2, 1)
-
-    # these use too much RAM to have multiple processing at once
-    if settings.bg_removal_enabled or settings.head_alignment_enabled:
-        core_count = 1
-
-    for i in range(core_count):
+    for i in range(subprocess_count):
         processing_thread: Process = Process(target=processing_looper, args=(in_queue, err_queue, out_queue, settings))
         processing_thread.start()
     print('processing process started')
             
 ## @brief saves an image that failed processing into the error folder and counts it as failed
-def save_errored_image(image: PIL.Image.Image, err_dir: FolderManager) -> None:
+def save_errored_image(image: PIL.Image.Image, err: Exception, err_dir: FolderManager) -> None:
     global stats_image_count_failed
+    # TODO: save each type of processing-step error to a different dir
     try:
         file_name: str = getattr(image, 'filename')
-        err_dir.write_file(Path(file_name).stem + 'jpg', backup_get_image_data(image))
+        file_name = Path(file_name).stem + 'jpg'
+        data: bytes = backup_get_image_data(image)
+        err_dir.write_file(file_name, data)
     except Exception as e:
         print(f"could not save the errored image: {e}")
     stats_image_count_failed += 1
