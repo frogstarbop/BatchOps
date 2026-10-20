@@ -252,6 +252,10 @@ def process(image: PIL.Image.Image, settings: BackgroundSettings) -> PIL.Image.I
     background_rgb: tuple[int, int, int] = settings.background_rgb
     intensity: str = settings.intensity
     white_pt: float | None = settings.white_pt
+
+    # the preset editor can't store None, so 0 (or less) also means estimate it from the photo
+    if white_pt is not None and white_pt <= 0:
+        white_pt = None
     # TODO: use model field in settings
 
     # TODO: initialize session only once during processing instead of per-image
