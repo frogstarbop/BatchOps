@@ -16,7 +16,8 @@ import head_alignment
 images_src_dir: str = 'images'
 images_jpg_dir: str = os.path.join(images_src_dir, 'jpeg')
 images_png_dir: str = os.path.join(images_src_dir, 'png')
-images_failues_dir: str = os.path.join(images_src_dir, 'head_alignment_specific')
+images_failures_dir: str = os.path.join(images_src_dir, 'head_alignment_specific')
+images_output_dir: str = os.path.join(images_src_dir, 'output')
 
 standard_align_preset = head_alignment.HeadAlignmentSettings(
     head_x = 0.5,
@@ -33,12 +34,20 @@ bad_reflect_preset = head_alignment.HeadAlignmentSettings(
 presets = [standard_align_preset]
 fail_presets = [bad_reflect_preset]
 
+# Takes files from the jpeg directory and outputs the result to the output directory
 def alignment_test():
-    with head_alignment.create_pose_landmarker() as landmarker:
-        for filename in os.listdir(images_src_dir):
+    # Ensure the output directory exists
+    os.makedirs(images_output_dir, exist_ok=True)
 
-            input_path = os.path.join(images_src_dir, filename)
-            output_path = os.path.join(images_src_dir, filename)
+    with head_alignment.create_pose_landmarker() as landmarker:
+        for filename in os.listdir(images_jpg_dir):
+
+            input_path = os.path.join(images_jpg_dir, filename)
+            output_path = os.path.join(images_output_dir, filename)
+
+            # Skip subdirectories or non-file entries if any exist inside jpeg/
+            if not os.path.isfile(input_path):
+                continue
 
             try:
                 image = PIL.Image.open(input_path)
@@ -51,3 +60,6 @@ def alignment_test():
 
             except Exception as e:
                 print(f"Skipped {filename}: {e}")
+
+if __name__ == "__main__":
+    alignment_test()
