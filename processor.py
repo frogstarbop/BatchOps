@@ -4,6 +4,7 @@ import time
 import PIL.Image
 import PIL.ImageOps
 import threading
+import queue
 from multiprocessing import Process, Queue
 from pathlib import Path
 
@@ -167,13 +168,16 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
         def flush_errs():
             nonlocal err_queue
             nonlocal err_dir
-            while not err_queue.empty():
-                print('file io: handling error1')
+            try:
                 image: PIL.Image.Image
                 err: Exception
+                image, err = err_queue.get(timeout=0.01)
                 print('file io: handling error')
-                image, err = err_queue.get()
                 save_errored_image(image, err, err_dir)
+            except ValueError:
+                return
+            except queue.Empty:
+                return
 
         sent_stop: bool = False
         recv_stops: int = 0
@@ -181,15 +185,20 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
         while True:
             flush_errs()
             # prioritize outputting
-            if not out_queue.empty():
-                item: tuple[str,bytes]|None = out_queue.get()
+            try:
+                item: tuple[str,bytes]|None = out_queue.get(timeout=0.01)
 
                 # stop once all processes put a fin flag in queue
                 if item == None:
                     recv_stops += 1
                     if recv_stops >= subprocess_count:
                         print('file io looper received fin, stopping')
+                        if not sent_stop:
+                            raise RuntimeError('Receiving stop before send stop')
                         flush_errs()
+                        in_queue.close()
+                        err_queue.close()
+                        out_queue.close()
                         return
                     continue
 
@@ -203,11 +212,13 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
                 except Exception as e:
                     print(f"file io: failed to write {file_name}:{e}")
                     stats_image_count_failed += 1
-             
-            elif not in_queue.full() and not sent_stop:
+            except ValueError:
+                pass
+            except queue.Empty:
+                pass
+            if not sent_stop:
                 try:
                     image: PIL.Image.Image = next(in_iter)
-
                     file_name = getattr(image, 'filename')
                     assert file_name is not None
                     print(f'file io: read image {file_name}')
