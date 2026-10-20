@@ -64,9 +64,10 @@ class Widget(QWidget):
         buttons = []
         selected_folder = ""
         config = configparser.ConfigParser()
-        config_preset_path = os.path.join(os.path.dirname(__file__), "presets.ini")
+        config_preset_path = str(preset_loader.PRESETS_PATH)
 
         def __init__(self, parent=None):
+                preset_loader.ensure_presets_file()
                 config_preset_path = "presets.ini"
                 super().__init__(parent)
                 self.in_dir = FolderManager("input", True)
