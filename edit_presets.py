@@ -53,10 +53,7 @@ class Widget (QWidget):
         self.presetsList.currentItemChanged.connect(self.on_presetsList_itemChanged)
 
         # find the preset config file
-        self.preset_path = os.path.join(
-            os.path.dirname(__file__),
-            "presets.ini"
-        )
+        self.preset_path = str(preset_loader.PRESETS_PATH)
 
         # If the preset config file exists, then read it
         if os.path.exists(self.preset_path):
