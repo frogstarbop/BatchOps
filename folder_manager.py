@@ -83,7 +83,9 @@ class FolderManager:
             raise FolderError('(None)', 'no folder path set')
 
         if not self.path.exists():
-            raise FolderError(self.path.name, 'folder does not exist')
+            if self.is_input:
+                raise FolderError(self.path.name, "folder does not exist")
+            return
 
         if self.path.is_file():
             raise FolderError(self.path.name, 'folder is a file')
@@ -99,7 +101,7 @@ class FolderManager:
             raise FolderError(self.path.name, 'folder contains sub-folders')
 
     def __get_file_type(self, file_path: Path) -> str:
-        return file_path.name.split('.')[-1]
+        return file_path.name.split('.')[-1].lower()
 
     ## @brief Get the image count in the path
     #
