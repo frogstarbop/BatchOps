@@ -154,69 +154,69 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     # a thread which constantly tries to load/save files for the queues
     # instead of reading the whole input folder into the input queue immediately
     # also handles updating stat image counts
-        def file_IO_looper():
-            global stats_image_count_failed
-            global stats_image_count_success
+    def file_IO_looper():
+        global stats_image_count_failed
+        global stats_image_count_success
 
-            print('file io: starting')
+        print('file io: starting')
 
-            # drains every waiting error, not just one
-            def flush_errs(timeout: float):
-                while True:
-                    try:
-                        file_name, message = err_queue.get(timeout=timeout)
-                    except queue.Empty:
-                        return
-                    print(f'file io: handling error: {message}')
-                    save_errored_image(file_name, err_dir)
-
-            to_send: list[str | None] = []   # paths (then stop flags) waiting for room in in_queue
-            exhausted = False                # True once the input folder is fully read
-            recv_stops = 0
-
+        # drains every waiting error, not just one
+        def flush_errs(timeout: float):
             while True:
-                flush_errs(0.001)
-
-                # output side
                 try:
-                    item = out_queue.get(timeout=0.01)
-                    if item is None:
-                        recv_stops += 1
-                        if recv_stops >= subprocess_count:
-                            flush_errs(0.5)   # errors travel on a separate pipe, give stragglers a moment
-                            print('file io looper received fin, stopping')
-                            in_queue.close()
-                            err_queue.close()
-                            out_queue.close()
-                            return
-                    else:
-                        file_name, data = item
-                        try:
-                            out_dir.write_file(file_name, data)
-                            stats_image_count_success += 1
-                            print(f'file io: wrote image {file_name}')
-                        except Exception as e:
-                            print(f"file io: failed to write {file_name}:{e}")
-                            stats_image_count_failed += 1
+                    file_name, message = err_queue.get(timeout=timeout)
                 except queue.Empty:
+                    return
+                print(f'file io: handling error: {message}')
+                save_errored_image(file_name, err_dir)
+
+        to_send: list[str | None] = []   # paths (then stop flags) waiting for room in in_queue
+        exhausted = False                # True once the input folder is fully read
+        recv_stops = 0
+
+        while True:
+            flush_errs(0.001)
+
+            # output side
+            try:
+                item = out_queue.get(timeout=0.01)
+                if item is None:
+                    recv_stops += 1
+                    if recv_stops >= subprocess_count:
+                        flush_errs(0.5)   # errors travel on a separate pipe, give stragglers a moment
+                        print('file io looper received fin, stopping')
+                        in_queue.close()
+                        err_queue.close()
+                        out_queue.close()
+                        return
+                else:
+                    file_name, data = item
+                    try:
+                        out_dir.write_file(file_name, data)
+                        stats_image_count_success += 1
+                        print(f'file io: wrote image {file_name}')
+                    except Exception as e:
+                        print(f"file io: failed to write {file_name}:{e}")
+                        stats_image_count_failed += 1
+            except queue.Empty:
+                pass
+
+            # input side: never block on a full in_queue
+            if not exhausted and not to_send:
+                try:
+                    image = next(in_iter)
+                    to_send.append(image.filename)
+                    image.close()
+                except StopIteration:
+                    to_send.extend([fin_flag] * subprocess_count)
+                    exhausted = True
+
+            if to_send:
+                try:
+                    in_queue.put_nowait(to_send[0])
+                    to_send.pop(0)
+                except queue.Full:
                     pass
-
-                # input side: never block on a full in_queue
-                if not exhausted and not to_send:
-                    try:
-                        image = next(in_iter)
-                        to_send.append(image.filename)
-                        image.close()
-                    except StopIteration:
-                        to_send.extend([fin_flag] * subprocess_count)
-                        exhausted = True
-
-                if to_send:
-                    try:
-                        in_queue.put_nowait(to_send[0])
-                        to_send.pop(0)
-                    except queue.Full:
-                        pass
 
     file_IO_thread: threading.Thread = threading.Thread(target=file_IO_looper)
     file_IO_thread.start()
