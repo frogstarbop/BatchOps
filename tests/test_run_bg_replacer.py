@@ -42,7 +42,7 @@ def background_test():
     os.makedirs(images_output_dir, exist_ok=True)
 
     # Load the model once on the GPU and reuse it for every image
-    session = bg_replacer.create_session(MODEL_NAME, "cpu")
+    session = bg_replacer.create_session(MODEL_NAME, "gpu")
 
     for filename in os.listdir(images_jpg_dir):
 
