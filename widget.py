@@ -22,6 +22,11 @@
 #     widget.show()
 #     sys.exit(app.exec())
 # widget.py
+
+import multiprocessing 
+multiprocessing.freeze_support()
+
+
 import sys
 import os
 import configparser
@@ -52,15 +57,17 @@ import processor
 import preset_loader
 from settings import Settings
 import image_compression as compression
+import head_alignment
 
 class Widget(QWidget):
         checkboxes = []
         buttons = []
         selected_folder = ""
         config = configparser.ConfigParser()
-        config_preset_path = os.path.join(os.path.dirname(__file__), "presets.ini")
+        config_preset_path = str(preset_loader.PRESETS_PATH)
 
         def __init__(self, parent=None):
+                preset_loader.ensure_presets_file()
                 config_preset_path = "presets.ini"
                 super().__init__(parent)
                 self.in_dir = FolderManager("input", True)
@@ -235,7 +242,8 @@ class Widget(QWidget):
                 folder = QFileDialog.getExistingDirectory(
                         self,
                         "Select Folder",
-                        self.selected_folder or os.path.expanduser("~")
+                        self.selected_folder or os.path.expanduser("~"),
+                        QFileDialog.Option.ShowDirsOnly | QFileDialog.Option.DontUseNativeDialog
                 )
 
                 if not folder:
@@ -307,8 +315,7 @@ class Widget(QWidget):
 
         def build_settings(self) -> Settings:
                 # Error when headalignment as it doesn't exist yet
-                if self.checkboxAlign.checkState() == Qt.CheckState.Checked:
-                        raise ValueError("Head alignment isn't available yet")
+                
                 
                 def load_step(checkbox, preset_type, step_name):
                         if checkbox.checkState() != Qt.CheckState.Checked:
@@ -320,12 +327,20 @@ class Widget(QWidget):
                 background = load_step(self.checkboxBackground, "background", "background removal")
                 cropping = load_step(self.checkboxCrop, "crop", "crop")
                 compression = load_step(self.checkboxCompress, "compression", "compression")
+                alignment = load_step(self.checkboxAlign, "alignment", "head alignment")
 
+                if alignment is not None:
+                        model_path = Path(head_alignment.__file__).parent / "bundled" / "pose_landmarker_full.task"
+                        if not model_path.exists():
+                                raise ValueError(
+                                        f"Head alignment needs {model_path.name} "
+                                        "in the same folder as head_alignment.py"
+                                )
                 return Settings(
                         compression_enabled = compression is not None,
                         compression = compression,
-                        head_alignment_enabled = False,
-                        head_alignment=None,
+                        head_alignment_enabled = alignment is not None,
+                        head_alignment=alignment,
                         cropping_enabled = cropping is not None,
                         cropping = cropping,
                         bg_removal_enabled= background is not None,
@@ -433,7 +448,8 @@ class Widget(QWidget):
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    widget = Widget()
-    widget.show()
-    sys.exit(app.exec())
+        
+        app = QApplication(sys.argv)
+        widget = Widget()
+        widget.show()
+        sys.exit(app.exec())

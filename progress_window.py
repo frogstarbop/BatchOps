@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtCore import (Qt, QTimer)
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import (QPixmap, QMovie)
 
 from PIL import Image, ImageFilter
 
@@ -47,11 +47,14 @@ class Widget (QWidget):
         self.update_timer.timeout.connect(self.update_frame)
         self.update_timer.start(1000 // 30) # TODO: match monitor frame rate
 
+        self.rotate_gears()
+
     def ui_connect(self):
 
         self.closeButton = self.findChild(QPushButton, "closeButton")
         self.buttons.append(self.closeButton)
         self.closeButton.clicked.connect(self.on_closeButton_clicked)
+        self.largeGear = self.findChild(QLabel, "gearIcon")
 
         self.progressBar = self.findChild(QProgressBar, "progressBar")
 
@@ -129,11 +132,18 @@ class Widget (QWidget):
             return f'{time_left} hours'
         return f'{time_left} days'
 
-    # def rotate_gears(self) -> None:
-        # angle = 3.0
-        # transform = QTransform().rotate(angle)
-        # rotated_pixmap = self.largeGearPixMap.transformed(transform, Qt.SmoothTransformation)
-        # self.largeGear.setPixmap(rotated_pixmap)
+    def rotate_gears(self) -> None:
+        self.movie = QMovie('bundled/big_gear_rotating.gif')
+
+        if not self.movie.isValid():
+            print('UI Error: could not find gear')
+            return
+
+        # might want to scale later
+        # self.movie.setScaledSize(QSize(300, 300))
+
+        self.largeGear.setMovie(self.movie)
+        self.movie.start()
 
     ## @brief For polling processing progress and updating display
     def update_frame(self):
@@ -144,6 +154,8 @@ class Widget (QWidget):
         self.statusText.setPlainText(self.get_status_text())
         
         if finished:
+            if self.movie.isValid():
+                self.movie.stop()
             self.update_timer.stop()
             self.timeRemaining.setText('Finished!')
             self.closeButton.setEnabled(True)
@@ -151,7 +163,6 @@ class Widget (QWidget):
             return
         
         self.timeRemaining.setText(self.get_time_remaining_text())
-        # self.rotate_gears()
         self.repaint()
     
 

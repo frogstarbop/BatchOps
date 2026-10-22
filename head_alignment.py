@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 @dataclass
 class HeadAlignmentSettings:
+    name: str
     head_x: float
     head_y: float
 
@@ -23,7 +24,7 @@ class HeadAlignmentSettings:
 # @returns A pose landmarker to pass to process()
 # @raises FileNotFoundError If there is no model file at model_path
 def create_pose_landmarker(
-        model_path: Path = Path(__file__).with_name("pose_landmarker_full.task"),
+        model_path:Path = Path(__file__).parent / "bundled" / "pose_landmarker_full.task",
         min_confidence: float = 0.75,
 ) -> PoseLandmarker:
     if not model_path.exists():

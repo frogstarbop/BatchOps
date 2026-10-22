@@ -90,3 +90,6 @@ v/
 
 # images which may be private IP
 tests/images/
+dist/widget
+widget.spec
+dist/*

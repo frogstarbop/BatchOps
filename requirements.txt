@@ -1,5 +1,5 @@
 PySide6
 pillow
+rembg
 rembg[cpu]
-rembg[gpu]
 mediapipe

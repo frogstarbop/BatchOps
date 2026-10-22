@@ -6,6 +6,7 @@ import configparser
 import image_compression as compression
 import cropping
 import bg_replacer as background
+import head_alignment
 import preset_loader
 from dataclasses import fields
 from PySide6.QtWidgets import (
@@ -52,10 +53,7 @@ class Widget (QWidget):
         self.presetsList.currentItemChanged.connect(self.on_presetsList_itemChanged)
 
         # find the preset config file
-        self.preset_path = os.path.join(
-            os.path.dirname(__file__),
-            "presets.ini"
-        )
+        self.preset_path = str(preset_loader.PRESETS_PATH)
 
         # If the preset config file exists, then read it
         if os.path.exists(self.preset_path):
@@ -91,6 +89,12 @@ class Widget (QWidget):
                 intensity="natural",
                 white_pt =0.0,
                 model_name="u2net"
+            )
+        elif preset_type == "alignment":
+            return head_alignment.HeadAlignmentSettings(
+                name = name,
+                head_x = 0.5,
+                head_y = 0.85
             )
         else:
             raise NotImplementedError(f"Type {preset_type} is not currently supported")
@@ -205,7 +209,7 @@ class Widget (QWidget):
             self,
             "Add Preset",
             "Preset type: ",
-            ["compression", "crop", "background"],
+            ["compression", "crop", "background", "alignment"],
             0,
             False
         )
