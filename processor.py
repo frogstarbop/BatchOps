@@ -3,6 +3,7 @@ import os
 import time
 import PIL.Image
 import PIL.ImageOps
+import traceback
 import threading
 import queue
 from multiprocessing import Process, Queue
@@ -223,8 +224,11 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
 
     # TODO: fix deadlock bug on final images from input queue
     subprocess_count = 1
+    # multiprocessing.set_start_method("spawn", force=True) is necessary for Windows to avoid issues with forking processes. It ensures that each subprocess starts fresh and can properly import the necessary modules.
+    # It is also necessary to avoid conflicts with older versions of Python, when using fork on 3.14>, nested functions can't be pickled.
     multiprocessing.set_start_method("spawn", force=True)
 
+    # start the processing subprocesses
     for i in range(subprocess_count):
         processing_thread: Process = Process(target=processing_looper, args=(in_queue, err_queue, out_queue, settings))
         processing_thread.start()
@@ -251,7 +255,8 @@ def processing_looper(in_queue, err_queue, out_queue, settings: Settings):
                 data = process_image(image, settings)
             out_queue.put((Path(file_name).stem + '.jpg', data))
         except Exception as e:
-            print(f'Exception on {file_name}: {e}')
+            # Provide a descriptive error message and traceback for debugging purposes. The error is also sent to the error queue for further handling.
+            print(f'Exception on {file_name}:\n{traceback.format_exc()}')
             err_queue.put((file_name, str(e)))   # strings pickle safely, exceptions don't always
 
 

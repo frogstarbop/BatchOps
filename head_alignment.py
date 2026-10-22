@@ -15,8 +15,31 @@ class HeadAlignmentSettings:
 
 # Pose landmarks 0-10 are the head: nose, both eyes (inner/centre/outer), both ears and both mouth corners.
 HEAD_LANDMARK_INDICES = range(11)
+_landmarker = None
 
+## @brief Imports mediapipe without letting it load matplotlib
+#
+# mediapipe imports matplotlib.pyplot at module level for drawing helpers this app never uses.
+# That pulls in dateutil and six, which crash under PySide6's import hook, so a placeholder
+# module answers the import instead and is removed again afterwards.
+def _import_mediapipe() -> None:
+    import sys
+    import types
 
+    if "matplotlib" in sys.modules:
+        import mediapipe  # noqa: F401
+        return
+
+    matplotlib = types.ModuleType("matplotlib")
+    pyplot = types.ModuleType("matplotlib.pyplot")
+    matplotlib.pyplot = pyplot
+    sys.modules["matplotlib"] = matplotlib
+    sys.modules["matplotlib.pyplot"] = pyplot
+    try:
+        import mediapipe  # noqa: F401
+    finally:
+        del sys.modules["matplotlib"]
+        del sys.modules["matplotlib.pyplot"]
 ## @brief Creates a MediaPipe pose landmarker
 #
 # The model file must already be on disk, nothing is downloaded. The caller owns the
@@ -31,6 +54,8 @@ def create_pose_landmarker(
         model_path:Path = Path(__file__).parent / "bundled" / "pose_landmarker_full.task",
         min_confidence: float = 0.75,
 ):
+    # Import mediapipe in a way that avoids loading matplotlib, which can cause issues with PySide6
+    _import_mediapipe()
     from mediapipe.tasks.python import BaseOptions
     from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
 
@@ -168,6 +193,7 @@ def process(image: Image.Image, settings: HeadAlignmentSettings) -> Image.Image:
 
     return reframe(image_array, frame)
 
+## @brief Returns a singleton pose landmarker, creating it if necessary
 def get_landmarker():
     global _landmarker
     if _landmarker is None:

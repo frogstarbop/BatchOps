@@ -1,29 +1,7 @@
-# # This Python file uses the following encoding: utf-8
-# import sys
-
-# from PySide6.QtWidgets import QApplication, QWidget
-
-# # Important:
-# # You need to run the following command to generate the ui_form.py file
-# #     pyside6-uic form.ui -o ui_form.py, or
-# #     pyside2-uic form.ui -o ui_form.py
-# from ui_form import Ui_Widget
-
-# class Widget(QWidget):
-#     def __init__(self, parent=None):
-#         super().__init__(parent)
-#         self.ui = Ui_Widget()
-#         self.ui.setupUi(self)
-
-
-# if __name__ == "__main__":
-#     app = QApplication(sys.argv)
-#     widget = Widget()
-#     widget.show()
-#     sys.exit(app.exec())
-# widget.py
 from __future__ import annotations
 import sys
+import time 
+import threading
 
 if getattr(sys, "frozen", False):
     import types
@@ -33,19 +11,12 @@ if getattr(sys, "frozen", False):
     sys.modules["matplotlib"] = _matplotlib
     sys.modules["matplotlib.pyplot"] = _pyplot
 
-
+## This is a fix for a bug in PyInstaller that causes it to spawn a significant number of windows when doing the initial imports.
 import multiprocessing 
 multiprocessing.freeze_support()
 
-
-
-
 import os
 import configparser
-# from edit_presets import Widget as EditPresetsWidget
-# from credits import Widget as CreditsWidget
-# from progress_window import Widget as ProcessingWidget
-# from folder_manager import FolderManager, FolderError
 from PySide6.QtWidgets import (
         QApplication,
         QProgressBar,
@@ -63,48 +34,49 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QIcon
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from pathlib import Path
-
-# import processor
-# from settings import Settings
-# import head_alignment
-
 import shutil
+
+
+progress = {"text" : "Starting..."}
+_t0 = time.perf_counter()
 
 ## @brief On Linux, registers the app with the desktop (menu entry, icon, taskbar matching)
 #
 # Only runs from a packaged build. Rewrites the files each launch, so moving the
 # executable just means starting it once from the new location.
 def install_desktop_entry() -> None:
-    if not sys.platform.startswith("linux"):
-        return
 
-    data_home = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+        # If the platform is not linux, then other methods work so return
+        if not sys.platform.startswith("linux"):
+                return
 
-    icon_source = Path(__file__).parent / "bundled" / "logo.png"
-    icon_dir = data_home / "icons" / "hicolor" / "256x256" / "apps"
-    icon_dest = icon_dir / "batchops.png"
-    if icon_source.exists():
-        icon_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(icon_source, icon_dest)
+        data_home = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
 
-    if getattr(sys, "frozen", False):
-        exec_line = f'"{sys.executable}"'
-    else:
-        exec_line = f'"{sys.executable}" "{Path(__file__).resolve()}"'
+        icon_source = Path(__file__).parent / "bundled" / "logo.png"
+        icon_dir = data_home / "icons" / "hicolor" / "256x256" / "apps"
+        icon_dest = icon_dir / "batchops.png"
+        if icon_source.exists():
+                icon_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(icon_source, icon_dest)
 
-    desktop_dir = data_home / "applications"
-    desktop_dir.mkdir(parents=True, exist_ok=True)
-    (desktop_dir / "batchops.desktop").write_text(
-        "[Desktop Entry]\n"
-        "Type=Application\n"
-        "Name=BatchOps\n"
-        f"Exec={exec_line}\n"
-        f"Icon={icon_dest}\n"
-        "Terminal=false\n"
-        "Categories=Graphics;\n"
-    )
+        if getattr(sys, "frozen", False):
+                exec_line = f'"{sys.executable}"'
+        else:
+                exec_line = f'"{sys.executable}" "{Path(__file__).resolve()}"'
+
+        desktop_dir = data_home / "applications"
+        desktop_dir.mkdir(parents=True, exist_ok=True)
+        (desktop_dir / "batchops.desktop").write_text(
+                "[Desktop Entry]\n"
+                "Type=Application\n"
+                "Name=BatchOps\n"
+                f"Exec={exec_line}\n"
+                f"Icon={icon_dest}\n"
+                "Terminal=false\n"
+                "Categories=Graphics;\n"
+        )
 
 class Widget(QWidget):
         checkboxes = []
@@ -327,18 +299,21 @@ class Widget(QWidget):
         def on_startButton_clicked(self):
                 global input_path
 
+                # If the output folder name is empty, then show a warning and return
                 if len(self.outputFolderNameTextbox.toPlainText()) < 1:
                         QMessageBox.warning(self, "You must select the name for your output folder", "You must enter a name for your output folder")
                         return
 
                 self.out_dir.set_path(str(input_path.parent / f"{self.outputFolderNameTextbox.toPlainText()}"))
-                
+
+                # If the user has selected any checkboxes, then build the settings and process the images
                 try:
                         settings = self.build_settings()
                 except (ValueError, NotImplementedError) as error:
                         QMessageBox.warning(self, "Cannot start", str(error))
                         return
-                
+
+                # Validate the input and output folders before starting processing
                 try:
                         self.in_dir.validate()
                         self.out_dir.validate()
@@ -346,33 +321,43 @@ class Widget(QWidget):
                         QMessageBox.warning(self, "Folder problem", f"{error.path}: {error}")
                         return
                 processor.process(settings, self.in_dir, self.out_dir)
-                
-                self.processing_overlay = ProcessingWidget(self)
 
+                # Show the processing overlay
+                self.processing_overlay = ProcessingWidget(self)
                 self.processing_overlay.setGeometry(self.rect())
                 self.processing_overlay.raise_()
                 self.processing_overlay.show()
 
+        ## @brief Enables or disables the start button based on whether a folder is selected and any checkboxes are checked
         def update_start_enabled(self):
                 self.startButton.setEnabled(
                         self.in_dir.path is not None and self.check_any_checkbox_states()
                 )
 
+        ## @brief Builds the settings object based on the selected checkboxes and presets
         def build_settings(self):
-                # Error when headalignment as it doesn't exist yet
-                
-                
+
+                ## @brief Loads the settings for a particular step if its checkbox is checked
                 def load_step(checkbox, preset_type, step_name):
+                        # If the checkbox is not checked, return None as the step is not enabled
                         if checkbox.checkState() != Qt.CheckState.Checked:
                                 return None
                         preset_name = self.selected_presets[preset_type]
+
+                        # If the preset name is None, then raise an error as the user has not selected a preset for this step
                         if preset_name is None:
                                 raise ValueError(f"select a {step_name} preset first")
+
+                        # Else, load the settings for the selected preset and return it
                         return preset_loader.load_settings(self.config, preset_name)
+
+                # Load the settings for each step if its checkbox is checked
                 background = load_step(self.checkboxBackground, "background", "background removal")
                 cropping = load_step(self.checkboxCrop, "crop", "crop")
                 compression = load_step(self.checkboxCompress, "compression", "compression")
                 alignment = load_step(self.checkboxAlign, "alignment", "head alignment")
+
+                # If head alignment is enabled, check that the model file exists in the same folder as head_alignment.py
                 if alignment is not None:
                         model_path = Path(head_alignment.__file__).parent / "bundled" / "pose_landmarker_full.task"
                         if not model_path.exists():
@@ -381,6 +366,7 @@ class Widget(QWidget):
                                         "in the same folder as head_alignment.py"
                                 )
 
+                # Return a Settings object with the loaded settings for each step
                 return Settings(
                         compression_enabled = compression is not None,
                         compression = compression,
@@ -449,10 +435,10 @@ class Widget(QWidget):
         ## @brief Update the scroll area width depending on the width of the buttons
         def update_preset_area_width(self):
                 comboboxes = [
-                self.presetsBackground,
-                self.presetsCrop,
-                self.presetsCompress,
-                self.presetsAlign
+                        self.presetsBackground,
+                        self.presetsCrop,
+                        self.presetsCompress,
+                        self.presetsAlign
                 ]
 
                 required_width = 200
@@ -469,13 +455,15 @@ class Widget(QWidget):
                 size_policy = self.scrollArea.sizePolicy()
                 size_policy.setHorizontalPolicy(QSizePolicy.Policy.Preferred)
                 self.scrollArea.setSizePolicy(size_policy)
-        
+
+        ## @brief Override the resize event to adjust the processing overlay size
         def resizeEvent(self, event):
                 super().resizeEvent(event)
 
                 if self.processing_overlay is not None:
                         self.processing_overlay.setGeometry(self.rect())
         
+        ## @brief Reloads the configuration from the preset file and repopulates the preset combo boxes
         def reload_config(self):
                 self.config.clear()
                 self.config.read(self.config_preset_path)
@@ -484,63 +472,113 @@ class Widget(QWidget):
                 self.populate_preset_combo(self.presetsAlign, "alignment")
                 self.populate_preset_combo(self.presetsCompress, "compression")
                 self.populate_preset_combo(self.presetsCrop, "crop")
-        
+
+        ## @brief Opens the credits window and hides the main window
         def on_creditsLabel_linkActivated(self, link: str):
                 from credits import Widget as CreditsWidget
                 self.credits_window = CreditsWidget(self)
                 self.credits_window.show()
                 self.hide()
                 
-
+## @brief Creates a loading window with a progress bar and status label
 def make_loading_window():
         window = QWidget()
         window.setWindowTitle("BatchOps")
+
         layout = QVBoxLayout(window)
         status_label = QLabel("Starting, please wait, this may take several minutes...")
+
         layout.addWidget(status_label)
+
         bar = QProgressBar()
         bar.setRange(0, 0)  # Indeterminate progress
+
         layout.addWidget(bar)
         window.setFixedSize(320, 100)
         window.show()
         return window, status_label
 
-if __name__ == "__main__":
-        
-        app = QApplication(sys.argv)
+## @brief Reports a message to the console and updates the status label in the loading window
+def report(text):
+        print(f"[{time.perf_counter() - _t0:6.2f}s] {text}")
+        progress["text"] = text
 
-        app.setApplicationName("BatchOps")
-        app.setDesktopFileName("batchops")
-        app.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "bundled", "logo.png")))
-        
-        loading, status_label = make_loading_window()
-        app.processEvents()  # Ensure the loading window is displayed
-
-        try:
-                import pyi_splash
-                pyi_splash.close()
-        except ImportError:
-                pass
-        def step(text):
-                status_label.setText(text)
-                app.processEvents()  # Update the UI
-
-        step("Loading tools...")
+## @brief Loads the project modules in a separate thread to avoid blocking the UI
+def load_project_modules():
+        # Import the modules that are used in the project. This is done in a separate thread to avoid blocking the UI.
+        global processor, preset_loader, head_alignment, Settings, FolderManager, FolderError, EditPresetsWidget, CreditsWidget, ProcessingWidget
+        report ("Loading tools...")
         import processor
         import preset_loader
         import head_alignment
         from settings import Settings
         from folder_manager import FolderManager, FolderError
 
-        step("Loading windows...")
+        report ("Loading windows...")
         from edit_presets import Widget as EditPresetsWidget
         from credits import Widget as CreditsWidget
         from progress_window import Widget as ProcessingWidget
 
-        step("Starting...")
+        report ("Starting...")
+
+
+if __name__ == "__main__":
+        # Main entry point for the application. Sets up the QApplication, shows a loading window, and starts the main event loop.
+        app = QApplication(sys.argv)
+        app.setApplicationName("BatchOps")
+        app.setDesktopFileName("batchops")
+        app.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "bundled", "logo.png")))
+
+        # Create a loading window to show progress while the application is starting
+        loading, status_label = make_loading_window()
+        app.processEvents()  # Ensure the loading window is displayed
+
+        # Close the splash screen if it exists (used when packaged with PyInstaller)
+        try:
+                import pyi_splash
+                pyi_splash.close()
+        except ImportError:
+                pass
+
+        # Start a separate thread to load the project modules, and handle any exceptions that occur during loading. 
+        # The main thread periodically checks if the loading is complete and updates the UI accordingly.
+        errors = []
+        def import_thread():
+                try:
+                        load_project_modules()
+                except BaseException as e:
+                        errors.append(e)
         
-        install_desktop_entry()
-        widget = Widget()
-        widget.show()
-        loading.close()
+        thread = threading.Thread(target=import_thread, daemon=True)
+        thread.start()
+
+        widget = None
+
+        ## @brief Checks if the import thread has finished and updates the UI accordingly
+        def finish_startup():
+                ## If the import thread is still running, update the status label and return
+                global widget
+                status_label.setText(progress["text"])
+                if thread.is_alive():
+                        return
+
+                ## If the import thread has finished, stop the timer and handle any errors that occurred during loading.
+                timer.stop()
+                if errors:
+                        QMessageBox.critical(None, "BatchOps failed to start", repr(errors[0]))
+                        app.quit()
+                        return
+
+                # If the import thread has finished successfully, set the multiprocessing start method to "spawn", install the desktop entry, create the main widget, and show it. 
+                # Finally, close the loading window.
+                multiprocessing.set_start_method("spawn", force=True)
+                install_desktop_entry()
+                widget = Widget()
+                widget.show()
+                loading.close()
+
+        # Start a timer to periodically check if the import thread has finished. The timer will call finish_startup() every 50 milliseconds.
+        timer = QTimer()
+        timer.timeout.connect(finish_startup)
+        timer.start(50)  # Check every 100 ms
         sys.exit(app.exec())
