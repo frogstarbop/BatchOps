@@ -1,9 +1,13 @@
 from dataclasses import dataclass
 import numpy as np
+import onnxruntime
 import PIL.Image
 import PIL.ImageFilter
 import rembg
 from rembg.sessions.base import BaseSession
+from memory_profiler import profile
+from timer import function_timer
+
 
 ## @brief A container for all the settings for replacing an image's background
 @dataclass
@@ -14,7 +18,7 @@ class BackgroundSettings:
     background_rgb: tuple[int, int, int]
 
     ## A key of SHADOW_PRESETS: soft, natural, deep or dramatic
-    intensity: str 
+    intensity: str
 
     ## The brightness treated as unshaded, estimated from the photo if None
     white_pt: float | None
@@ -51,6 +55,63 @@ SHADOW_PRESETS = {
     "dramatic": (0.04, 0.60),  # High-contrast contact shadows for textured outdoor floors
 }
 DEFAULT_INTENSITY = "natural"
+
+# --- Hardware acceleration: ONNX Runtime execution providers ---
+# Needs: pip install onnxruntime-openvino  (Intel CPUs and GPUs, any OS)
+OPENVINO_PROVIDER = "OpenVINOExecutionProvider"
+
+# Needs: pip install onnxruntime-directml  (any GPU on Windows)
+DML_PROVIDER = "DmlExecutionProvider"
+DML_DEVICE_ID = 0  # Which GPU DirectML uses; default is 0
+
+# Plain ONNX Runtime CPU provider, always available
+CPU_PROVIDER = "CPUExecutionProvider"
+
+## @brief Builds the provider priority list for the requested hardware
+#
+# @param hardware "gpu" or "cpu"
+# @returns A list of provider names or (name, options) tuples, in priority order
+def _select_providers(hardware: str) -> list:
+    if hardware not in ("gpu", "cpu"):
+        raise ValueError(f"device must be 'gpu' or 'cpu', got {hardware!r}")
+
+    available = onnxruntime.get_available_providers()
+    providers = []
+
+    if hardware == "gpu":
+        if OPENVINO_PROVIDER in available:
+            providers.append((OPENVINO_PROVIDER, {"device_type": "GPU"}))
+        if DML_PROVIDER in available:
+            providers.append((DML_PROVIDER, {"device_id": DML_DEVICE_ID, "arena_extend_strategy": "kSameAsRequested"}))
+        if not providers:
+            print("No GPU provider available, falling back to CPU")
+
+    # CPU requested, or no GPU provider was found
+    if not providers and OPENVINO_PROVIDER in available:
+        providers.append((OPENVINO_PROVIDER, {"device_type": "CPU"}))
+
+    providers.append(CPU_PROVIDER)
+    return providers
+
+## @brief Creates a rembg session that runs on the requested device
+#
+# Create this once and pass it to process() for every image, since loading the model is slow
+# and uses a lot of memory.
+#
+# @param model_name The rembg model to load
+# @param hardware "gpu" or "cpu"; falls back to the best available option if the preferred one isn't installed
+# @returns A rembg session using the providers from _select_providers
+def create_session(model_name: str, hardware: str) -> BaseSession:
+    providers = _select_providers(hardware)
+    print(f"Using providers: {providers}")
+
+    # Memory-saving options
+    sess_opts = onnxruntime.SessionOptions()
+    sess_opts.enable_mem_pattern = False  # don't pre-plan and hold one big block of memory
+    sess_opts.enable_cpu_mem_arena = False  # give CPU memory back instead of caching it
+
+    rembg_session = rembg.new_session(model_name, sess_opts=sess_opts, providers=providers)
+    return rembg_session
 
 
 ## @brief Checks that a background colour is three values from 0-255
@@ -243,23 +304,33 @@ def composite(
 #
 # @param image The portrait to process, already upright (EXIF rotation is not applied here)
 # @param settings The background removal settings to apply
+# @param session A rembg session from create_session(), required so the model is loaded once, not per image
 # @returns The new RGB image, same size as the input
 # @raises ValueError If the colour is invalid, the image has transparency, intensity is unknown,
 #                    or white_pt cannot be estimated or is not above the preset's black point
 #                    and at most 1.0
 # @raises TypeError If session is not a rembg session
-def process(image: PIL.Image.Image, settings: BackgroundSettings) -> PIL.Image.Image:
+
+@function_timer()
+@profile()
+def process(image: PIL.Image.Image,
+            settings: BackgroundSettings,
+            session: BaseSession,
+            ) -> PIL.Image.Image:
+
+    # 1. A session must be provided, created once by the caller with create_session()
+    if not isinstance(session, BaseSession):
+        raise TypeError(
+            f"session must be created with bg_replacer.create_session(<model name>), got {type(session).__name__}"
+        )
+
     background_rgb: tuple[int, int, int] = settings.background_rgb
     intensity: str = settings.intensity
     white_pt: float | None = settings.white_pt
 
-    # the preset editor can't store None, so 0 (or less) also means estimate it from the photo
+    # The preset editor can't store None, so 0 (or less) means estimate from photo
     if white_pt is not None and white_pt <= 0:
         white_pt = None
-    # TODO: use model field in settings
-
-    # TODO: initialize session only once during processing instead of per-image
-    session: BaseSession = rembg.new_session()
 
     validate_rgb(background_rgb)
     validate_opaque(image)
