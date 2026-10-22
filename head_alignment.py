@@ -1,12 +1,14 @@
-from pathlib import Path
-
-import mediapipe as mp
-import numpy as np
-from PIL import Image
-from mediapipe.tasks.python import BaseOptions
-from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions
 
 from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+import numpy as np
+from PIL import Image
+
+if TYPE_CHECKING:
+    from mediapipe.tasks.python.vision import PoseLandmarker
+
 
 @dataclass
 class HeadAlignmentSettings:
@@ -26,7 +28,10 @@ class HeadAlignmentSettings:
 def create_pose_landmarker(
         model_path:Path = Path(__file__).parent / "bundled" / "pose_landmarker_full.task",
         min_confidence: float = 0.75,
-) -> PoseLandmarker:
+):
+    from mediapipe.tasks.python import BaseOptions
+    from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions
+
     if not model_path.exists():
         raise FileNotFoundError(f"pose landmarker model not found at {model_path}")
 
@@ -48,9 +53,11 @@ def create_pose_landmarker(
 
 # @returns The (x, y) coordinates of the head's centre the padded box around the whole person as (left, top, right, bottom)
 # @raises ValueError If there is not exactly one person in the image
-def calculate_head_coords(image_array: np.ndarray, landmarker: PoseLandmarker
+def calculate_head_coords(image_array: np.ndarray, landmarker
                           ) -> tuple[tuple[float, float], tuple[float, float, float, float]]:
     image_h, image_w = image_array.shape[:2]
+
+    import mediapipe as mp
 
     # Mediapipe gets the pose landmarks
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_array)
