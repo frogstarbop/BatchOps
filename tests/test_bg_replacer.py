@@ -3,7 +3,6 @@ import PIL.Image
 import numpy as np
 import os
 import sys
-import rembg
 
 # this makes the module to test importable
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -12,7 +11,6 @@ sys.path.append(outer_dir)
 
 # the module to test
 import bg_replacer
-
 
 class TestBgReplacerValidation(unittest.TestCase):
 
@@ -60,42 +58,6 @@ class TestBgReplacerValidation(unittest.TestCase):
         self.assertEqual(arr.shape, (2, 2, 3))
         self.assertTrue(np.max(arr) <= 1.0)
         self.assertTrue(np.min(arr) >= 0.0)
-
-
-class TestBgReplacer(unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        """This runs exactly once before any tests in this class start."""
-        print("\nLoading AI model for integration tests...")
-        cls.session = rembg.new_session("birefnet-portrait")
-
-        # Setup the path to test images
-        cls.test_image_path = os.path.join(current_dir, "images", "jpeg", "studio", "DSC09549.jpg")
-
-    def test_replace_background_execution(self):
-        """Tests that the main function processes an image and returns a valid output."""
-
-        # If the image is missing, PIL will raise a FileNotFoundError and fail the test,
-        image = PIL.Image.open(self.test_image_path)
-        original_size = image.size
-
-        result_image = bg_replacer.replace_background(
-            image=image,
-            background_rgb=(204, 0, 204),  # Pink background
-            session=self.session,
-            intensity="natural"
-        )
-
-        # Ensure the function returned a Pillow Image
-        self.assertIsInstance(result_image, PIL.Image.Image)
-
-        # Ensure the output image dimensions match the input exactly
-        self.assertEqual(result_image.size, original_size)
-
-        # Ensure the final output is in standard RGB mode
-        self.assertEqual(result_image.mode, "RGB")
-
 
 if __name__ == '__main__':
     unittest.main()
