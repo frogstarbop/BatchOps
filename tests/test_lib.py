@@ -24,6 +24,7 @@ images_src_dir: str = 'images'
 images_jpg_dir: str = join(images_src_dir, 'jpeg')
 images_png_dir: str = join(images_src_dir, 'png')
 images_compression_failure: str = join(images_src_dir, 'compression_specific')
+images_jpg_single_dir: str = join(images_jpg_dir, 'studio_single')
 
 SettingsType = TypeVar('SettingsType', CroppingSettings, CompressionSettings, BackgroundSettings, HeadAlignmentSettings)
 
