@@ -1,13 +1,15 @@
+from __future__ import annotations
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 import numpy as np
 import onnxruntime
 import PIL.Image
 import PIL.ImageFilter
-import rembg
-from rembg.sessions.base import BaseSession
 from memory_profiler import profile
 from timer import function_timer
 
+if TYPE_CHECKING:
+    from rembg.sessions.base import BaseSession
 
 ## @brief A container for all the settings for replacing an image's background
 @dataclass
@@ -102,6 +104,8 @@ def _select_providers(hardware: str) -> list:
 # @param hardware "gpu" or "cpu"; falls back to the best available option if the preferred one isn't installed
 # @returns A rembg session using the providers from _select_providers
 def create_session(model_name: str, hardware: str) -> BaseSession:
+    import rembg
+
     providers = _select_providers(hardware)
     print(f"Using providers: {providers}")
 
@@ -252,6 +256,9 @@ def estimate_white_point(luminance: np.ndarray, mask: np.ndarray) -> float:
 # @raises TypeError If session is not a rembg session, since rembg would silently load a default model
 #                   for None and fail confusingly for anything else (such as a model name)
 def extract_mask(image: PIL.Image.Image, session: BaseSession) -> np.ndarray:
+    import rembg
+    from rembg.sessions.base import BaseSession
+
     if not isinstance(session, BaseSession):
         raise TypeError(
             f"session must be created with rembg.new_session(<model name>), got {type(session).__name__}"
@@ -317,6 +324,7 @@ def process(image: PIL.Image.Image,
             settings: BackgroundSettings,
             session: BaseSession,
             ) -> PIL.Image.Image:
+    from rembg.sessions.base import BaseSession
 
     # 1. A session must be provided, created once by the caller with create_session()
     if not isinstance(session, BaseSession):
