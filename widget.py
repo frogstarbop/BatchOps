@@ -49,7 +49,7 @@ from PySide6.QtWidgets import (
         QTextEdit
 )
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtCore import Qt
 from pathlib import Path
 
@@ -58,6 +58,42 @@ import preset_loader
 from settings import Settings
 import image_compression as compression
 import head_alignment
+
+import shutil
+
+## @brief On Linux, registers the app with the desktop (menu entry, icon, taskbar matching)
+#
+# Only runs from a packaged build. Rewrites the files each launch, so moving the
+# executable just means starting it once from the new location.
+def install_desktop_entry() -> None:
+    if not sys.platform.startswith("linux"):
+        return
+
+    data_home = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+
+    icon_source = Path(__file__).parent / "bundled" / "logo.png"
+    icon_dir = data_home / "icons" / "hicolor" / "256x256" / "apps"
+    icon_dest = icon_dir / "batchops.png"
+    if icon_source.exists():
+        icon_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(icon_source, icon_dest)
+
+    if getattr(sys, "frozen", False):
+        exec_line = f'"{sys.executable}"'
+    else:
+        exec_line = f'"{sys.executable}" "{Path(__file__).resolve()}"'
+
+    desktop_dir = data_home / "applications"
+    desktop_dir.mkdir(parents=True, exist_ok=True)
+    (desktop_dir / "batchops.desktop").write_text(
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        "Name=BatchOps\n"
+        f"Exec={exec_line}\n"
+        f"Icon={icon_dest}\n"
+        "Terminal=false\n"
+        "Categories=Graphics;\n"
+    )
 
 class Widget(QWidget):
         checkboxes = []
@@ -450,6 +486,11 @@ class Widget(QWidget):
 if __name__ == "__main__":
         
         app = QApplication(sys.argv)
+
+        app.setApplicationName("BatchOps")
+        app.setDesktopFileName("batchops")
+        app.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "bundled", "logo.png")))
+        install_desktop_entry()
         widget = Widget()
         widget.show()
         sys.exit(app.exec())
