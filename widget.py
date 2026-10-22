@@ -22,25 +22,38 @@
 #     widget.show()
 #     sys.exit(app.exec())
 # widget.py
+from __future__ import annotations
+import sys
+
+if getattr(sys, "frozen", False):
+    import types
+    _matplotlib = types.ModuleType("matplotlib")
+    _pyplot = types.ModuleType("matplotlib.pyplot")
+    _matplotlib.pyplot = _pyplot
+    sys.modules["matplotlib"] = _matplotlib
+    sys.modules["matplotlib.pyplot"] = _pyplot
+
 
 import multiprocessing 
 multiprocessing.freeze_support()
 
 
-import sys
+
+
 import os
 import configparser
-from edit_presets import Widget as EditPresetsWidget
-from credits import Widget as CreditsWidget
-from progress_window import Widget as ProcessingWidget
-from folder_manager import FolderManager, FolderError
+# from edit_presets import Widget as EditPresetsWidget
+# from credits import Widget as CreditsWidget
+# from progress_window import Widget as ProcessingWidget
+# from folder_manager import FolderManager, FolderError
 from PySide6.QtWidgets import (
-        QApplication, 
+        QApplication,
+        QProgressBar,
+        QVBoxLayout, 
         QWidget, 
         QPushButton, 
         QFileDialog, 
         QCheckBox, 
-        QInputDialog,
         QScrollArea,
         QSizePolicy,
         QComboBox,
@@ -49,15 +62,13 @@ from PySide6.QtWidgets import (
         QTextEdit
 )
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtGui import QPixmap, QIcon
+from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt
 from pathlib import Path
 
-import processor
-import preset_loader
-from settings import Settings
-import image_compression as compression
-import head_alignment
+# import processor
+# from settings import Settings
+# import head_alignment
 
 import shutil
 
@@ -100,11 +111,9 @@ class Widget(QWidget):
         buttons = []
         selected_folder = ""
         config = configparser.ConfigParser()
-        config_preset_path = str(preset_loader.PRESETS_PATH)
 
         def __init__(self, parent=None):
-                preset_loader.ensure_presets_file()
-                config_preset_path = "presets.ini"
+                self.config_preset_path = str(preset_loader.PRESETS_PATH)
                 super().__init__(parent)
                 self.in_dir = FolderManager("input", True)
                 self.out_dir = FolderManager("output", False)
@@ -267,6 +276,7 @@ class Widget(QWidget):
 
         ## @brief Defines the interaction for the preset editor button
         def on_presetButton_clicked(self):
+                
                 self.edit_presets_window = EditPresetsWidget(self)
                 self.edit_presets_window.show()
                 self.hide()
@@ -335,7 +345,6 @@ class Widget(QWidget):
                 except FolderError as error:
                         QMessageBox.warning(self, "Folder problem", f"{error.path}: {error}")
                         return
-                
                 processor.process(settings, self.in_dir, self.out_dir)
                 
                 self.processing_overlay = ProcessingWidget(self)
@@ -349,7 +358,7 @@ class Widget(QWidget):
                         self.in_dir.path is not None and self.check_any_checkbox_states()
                 )
 
-        def build_settings(self) -> Settings:
+        def build_settings(self):
                 # Error when headalignment as it doesn't exist yet
                 
                 
@@ -364,7 +373,6 @@ class Widget(QWidget):
                 cropping = load_step(self.checkboxCrop, "crop", "crop")
                 compression = load_step(self.checkboxCompress, "compression", "compression")
                 alignment = load_step(self.checkboxAlign, "alignment", "head alignment")
-
                 if alignment is not None:
                         model_path = Path(head_alignment.__file__).parent / "bundled" / "pose_landmarker_full.task"
                         if not model_path.exists():
@@ -372,6 +380,7 @@ class Widget(QWidget):
                                         f"Head alignment needs {model_path.name} "
                                         "in the same folder as head_alignment.py"
                                 )
+
                 return Settings(
                         compression_enabled = compression is not None,
                         compression = compression,
@@ -477,11 +486,24 @@ class Widget(QWidget):
                 self.populate_preset_combo(self.presetsCrop, "crop")
         
         def on_creditsLabel_linkActivated(self, link: str):
+                from credits import Widget as CreditsWidget
                 self.credits_window = CreditsWidget(self)
                 self.credits_window.show()
                 self.hide()
                 
 
+def make_loading_window():
+        window = QWidget()
+        window.setWindowTitle("BatchOps")
+        layout = QVBoxLayout(window)
+        status_label = QLabel("Starting, please wait, this may take several minutes...")
+        layout.addWidget(status_label)
+        bar = QProgressBar()
+        bar.setRange(0, 0)  # Indeterminate progress
+        layout.addWidget(bar)
+        window.setFixedSize(320, 100)
+        window.show()
+        return window, status_label
 
 if __name__ == "__main__":
         
@@ -490,7 +512,35 @@ if __name__ == "__main__":
         app.setApplicationName("BatchOps")
         app.setDesktopFileName("batchops")
         app.setWindowIcon(QIcon(os.path.join(os.path.dirname(__file__), "bundled", "logo.png")))
+        
+        loading, status_label = make_loading_window()
+        app.processEvents()  # Ensure the loading window is displayed
+
+        try:
+                import pyi_splash
+                pyi_splash.close()
+        except ImportError:
+                pass
+        def step(text):
+                status_label.setText(text)
+                app.processEvents()  # Update the UI
+
+        step("Loading tools...")
+        import processor
+        import preset_loader
+        import head_alignment
+        from settings import Settings
+        from folder_manager import FolderManager, FolderError
+
+        step("Loading windows...")
+        from edit_presets import Widget as EditPresetsWidget
+        from credits import Widget as CreditsWidget
+        from progress_window import Widget as ProcessingWidget
+
+        step("Starting...")
+        
         install_desktop_entry()
         widget = Widget()
         widget.show()
+        loading.close()
         sys.exit(app.exec())
