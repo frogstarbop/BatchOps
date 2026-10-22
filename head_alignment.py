@@ -1,13 +1,12 @@
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import mediapipe as mp
 import numpy as np
 from PIL import Image
-from mediapipe.tasks.python import BaseOptions
-from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
 
 from dataclasses import dataclass
-
+if TYPE_CHECKING:
+    from mediapipe.tasks.python.vision import PoseLandmarker
 @dataclass
 class HeadAlignmentSettings:
     name: str
@@ -16,8 +15,31 @@ class HeadAlignmentSettings:
 
 # Pose landmarks 0-10 are the head: nose, both eyes (inner/centre/outer), both ears and both mouth corners.
 HEAD_LANDMARK_INDICES = range(11)
+_landmarker = None
 
+## @brief Imports mediapipe without letting it load matplotlib
+#
+# mediapipe imports matplotlib.pyplot at module level for drawing helpers this app never uses.
+# That pulls in dateutil and six, which crash under PySide6's import hook, so a placeholder
+# module answers the import instead and is removed again afterwards.
+def _import_mediapipe() -> None:
+    import sys
+    import types
 
+    if "matplotlib" in sys.modules:
+        import mediapipe  # noqa: F401
+        return
+
+    matplotlib = types.ModuleType("matplotlib")
+    pyplot = types.ModuleType("matplotlib.pyplot")
+    matplotlib.pyplot = pyplot
+    sys.modules["matplotlib"] = matplotlib
+    sys.modules["matplotlib.pyplot"] = pyplot
+    try:
+        import mediapipe  # noqa: F401
+    finally:
+        del sys.modules["matplotlib"]
+        del sys.modules["matplotlib.pyplot"]
 ## @brief Creates a MediaPipe pose landmarker
 #
 # The model file must already be on disk, nothing is downloaded. The caller owns the
@@ -31,7 +53,12 @@ HEAD_LANDMARK_INDICES = range(11)
 def create_pose_landmarker(
         model_path:Path = Path(__file__).parent / "bundled" / "pose_landmarker_full.task",
         min_confidence: float = 0.75,
-) -> PoseLandmarker:
+):
+    # Import mediapipe in a way that avoids loading matplotlib, which can cause issues with PySide6
+    _import_mediapipe()
+    from mediapipe.tasks.python import BaseOptions
+    from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
+
     if not model_path.exists():
         raise FileNotFoundError(f"pose landmarker model not found at {model_path}")
 
@@ -53,7 +80,8 @@ def create_pose_landmarker(
 # @param landmarker A pose landmarker, created by create_pose_landmarker()
 # @returns The (x, y) coordinates of the head's centre in pixels
 # @raises ValueError If there is not exactly one person in the image
-def locate_head_centre(image_array: np.ndarray, landmarker: PoseLandmarker) -> tuple[float, float]:
+def locate_head_centre(image_array: np.ndarray, landmarker) -> tuple[float, float]:
+    import mediapipe as mp
     image_h, image_w = image_array.shape[:2]
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_array)
     poses = landmarker.detect(mp_image).pose_landmarks
@@ -153,7 +181,7 @@ def process(image: Image.Image, settings: HeadAlignmentSettings) -> Image.Image:
     image = image.crop((2, 2, width - 2, height - 2))
 
     # TODO: dont create this every image
-    landmarker = create_pose_landmarker()
+    landmarker = get_landmarker()
 
     image_array = np.asarray(image.convert("RGB"))
 
@@ -164,3 +192,10 @@ def process(image: Image.Image, settings: HeadAlignmentSettings) -> Image.Image:
     frame = compute_target_frame(image_size, head_centre, head_x, head_y)
 
     return reframe(image_array, frame)
+
+## @brief Returns a singleton pose landmarker, creating it if necessary
+def get_landmarker():
+    global _landmarker
+    if _landmarker is None:
+        _landmarker = create_pose_landmarker()
+    return _landmarker

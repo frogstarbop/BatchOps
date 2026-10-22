@@ -1,5 +1,9 @@
+# Runtime
 PySide6
-pillow
-rembg
+Pillow>=10.1
+numpy
 rembg[cpu]
 mediapipe
+
+# Only needed to build the executable
+pyinstaller
