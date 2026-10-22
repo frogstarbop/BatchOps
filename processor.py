@@ -6,6 +6,7 @@ import PIL.ImageOps
 import threading
 import queue
 from multiprocessing import Process, Queue
+import multiprocessing
 from pathlib import Path
 
 from settings import Settings
@@ -270,6 +271,7 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
 
     # TODO: fix deadlock bug on final images from input queue
     subprocess_count = 1
+    multiprocessing.set_start_method("fork", force=True)
 
     for i in range(subprocess_count):
         processing_thread: Process = Process(target=processing_looper, args=(in_queue, err_queue, out_queue, settings))
