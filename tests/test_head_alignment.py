@@ -20,12 +20,14 @@ images_failures_dir: str = os.path.join(images_src_dir, 'head_alignment_specific
 images_output_dir: str = os.path.join(images_src_dir, 'output')
 
 standard_align_preset = head_alignment.HeadAlignmentSettings(
+    name="standard_align_preset",
     head_x = 0.5,
     head_y = 0.85,
 )
 
 
 bad_reflect_preset = head_alignment.HeadAlignmentSettings(
+    name="fail_alignment_preset",
     head_x = 0.5,
     head_y = 0.58,
 )
