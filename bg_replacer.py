@@ -2,7 +2,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 import numpy as np
-import onnxruntime
 import PIL.Image
 import PIL.ImageFilter
 from memory_profiler import profile
@@ -74,6 +73,8 @@ CPU_PROVIDER = "CPUExecutionProvider"
 # @param hardware "gpu" or "cpu"
 # @returns A list of provider names or (name, options) tuples, in priority order
 def _select_providers(hardware: str) -> list:
+    import onnxruntime
+
     if hardware not in ("gpu", "cpu"):
         raise ValueError(f"device must be 'gpu' or 'cpu', got {hardware!r}")
 
@@ -104,6 +105,7 @@ def _select_providers(hardware: str) -> list:
 # @param hardware "gpu" or "cpu"; falls back to the best available option if the preferred one isn't installed
 # @returns A rembg session using the providers from _select_providers
 def create_session(model_name: str, hardware: str) -> BaseSession:
+    import onnxruntime
     import rembg
 
     providers = _select_providers(hardware)
