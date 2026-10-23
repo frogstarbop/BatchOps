@@ -87,6 +87,7 @@ class Widget(QWidget):
         def __init__(self, parent=None):
                 self.config_preset_path = str(preset_loader.PRESETS_PATH)
                 super().__init__(parent)
+                preset_loader.ensure_presets_file()
                 self.in_dir = FolderManager("input", True)
                 self.out_dir = FolderManager("output", False)
                 self.comboBoxes = []
