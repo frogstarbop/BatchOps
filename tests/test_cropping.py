@@ -1,31 +1,39 @@
 import PIL.Image
-import os
-import sys
+import unittest
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-outer_dir = os.path.dirname(current_dir)
-sys.path.append(outer_dir)
-
+from test_lib import test_preset_list, images_jpg_dir
 import cropping
 
-def cropping_test():
-    if len(sys.argv) < 4:
-        print("please file path as first argument e.g folder/test.img and aspect ratio as second and third argument e.g 4 3")
-        sys.exit(1)
-    
-    image_path = sys.argv[1]
-    width_ratio = int(sys.argv[2])
-    height_ratio = int(sys.argv[3])
+presets = [
+    cropping.CroppingSettings(
+        name='desktop',
+        width_ratio=16,
+        height_ratio=9
+    ),
+    cropping.CroppingSettings(
+        name='square',
+        width_ratio=1,
+        height_ratio=1
+    ),
+    cropping.CroppingSettings(
+        name='tall',
+        width_ratio=9,
+        height_ratio=16
+    ),
+]
 
-    image = PIL.Image.open(image_path)
-    settings = cropping.CroppingSettings(
-        name='test',
-        width_ratio=width_ratio,
-        height_ratio=height_ratio
-    )
-    cropped_image = cropping.process(image, settings)
+class TestCropping(unittest.TestCase):
+    def crop_image(self, image: PIL.Image.Image, settings: cropping.CroppingSettings):
+        cropped_image = cropping.process(image, settings)
 
-    cropped_image.save('test_cropped_image.jpg')
+        AR = cropped_image.width / cropped_image.height
+        TAR = settings.width_ratio / settings.height_ratio
+
+        # allow off by one errors, but output should be the right aspect ratio
+        self.assertAlmostEqual(AR, TAR, 2)
+
+    def test_cropping_doesnt_crash(self):
+        test_preset_list(images_jpg_dir, presets, self.crop_image)
 
 if __name__ == "__main__":
-    cropping_test()
+    unittest.main()

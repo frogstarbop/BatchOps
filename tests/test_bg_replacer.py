@@ -1,18 +1,21 @@
 import unittest
 import PIL.Image
 import numpy as np
-import os
-import sys
 import rembg
 
-# this makes the module to test importable
-current_dir = os.path.dirname(os.path.abspath(__file__))
-outer_dir = os.path.dirname(current_dir)
-sys.path.append(outer_dir)
+from test_lib import images_jpg_single_dir, test_folder
 
 # the module to test
 import bg_replacer
 
+
+preset = bg_replacer.BackgroundSettings(
+    name='stest',
+    background_rgb=(204, 0, 204),  # Pink background
+    intensity="natural",
+    white_pt=None,
+    model_name='unet'
+)
 
 class TestBgReplacerValidation(unittest.TestCase):
 
@@ -70,22 +73,12 @@ class TestBgReplacer(unittest.TestCase):
         print("\nLoading AI model for integration tests...")
         cls.session = rembg.new_session("birefnet-portrait")
 
-        # Setup the path to test images
-        cls.test_image_path = os.path.join(current_dir, "images", "jpeg", "studio", "DSC09549.jpg")
-
-    def test_replace_background_execution(self):
+    def replace_background_execution(self, image: PIL.Image.Image, settings: bg_replacer.BackgroundSettings):
         """Tests that the main function processes an image and returns a valid output."""
 
         # If the image is missing, PIL will raise a FileNotFoundError and fail the test,
-        image = PIL.Image.open(self.test_image_path)
         original_size = image.size
-
-        result_image = bg_replacer.replace_background(
-            image=image,
-            background_rgb=(204, 0, 204),  # Pink background
-            session=self.session,
-            intensity="natural"
-        )
+        result_image = bg_replacer.process(image, settings)
 
         # Ensure the function returned a Pillow Image
         self.assertIsInstance(result_image, PIL.Image.Image)
@@ -96,6 +89,8 @@ class TestBgReplacer(unittest.TestCase):
         # Ensure the final output is in standard RGB mode
         self.assertEqual(result_image.mode, "RGB")
 
+    def test_replace_works_jpg(self):
+        test_folder(images_jpg_single_dir, preset, self.replace_background_execution)
 
 if __name__ == '__main__':
     unittest.main()
