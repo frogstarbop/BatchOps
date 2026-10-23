@@ -5,6 +5,7 @@ import PIL.Image
 import PIL.ImageOps
 import threading
 import queue
+import tracemalloc
 from multiprocessing import Process, Queue
 import multiprocessing
 from pathlib import Path
@@ -18,6 +19,23 @@ import cropping
 
 QUEUE_WAITING_SLEEP_SECONDS: float = 0.05
 QUEUE_SHORT_SLEEP_SECONDS: float = 0.01
+
+## ERROR FLAGS ##
+# assigns relevant stages a numerical value
+
+ERR_UNKNOWN = 0
+ERR_BGREM = 1
+ERR_HEADALG = 2
+ERR_CROPPING = 3
+ERR_COMPRESSION = 4
+
+err_dir = {
+    ERR_UNKNOWN: 'unknown',
+    ERR_BGREM: 'bgrem',
+    ERR_HEADALG: 'headalg',
+    ERR_CROPPING: 'cropping',
+    ERR_COMPRESSION: 'compression'
+}
 
 ### stats section ###
 # statistics to show for ui
@@ -84,15 +102,15 @@ def process_image(image: PIL.Image.Image, settings: Settings) -> bytes:
 
     if settings.bg_removal_enabled:
         assert settings.bg_removal is not None
-        image = bg_removal.process(image, settings.bg_removal)
+        image = bg_removal.process(image, settings.bg_removal, 1)
 
     if settings.head_alignment_enabled:
         assert settings.head_alignment is not None
-        image = head_alignment.process(image, settings.head_alignment)
+        image = head_alignment.process(image, settings.head_alignment, 2)
 
     if settings.cropping_enabled:
         assert settings.cropping is not None
-        image = cropping.process(image, settings.cropping)
+        image = cropping.process(image, settings.cropping, 3)
 
     # JPEG can't store transparency or palettes
     if image.mode != 'RGB':
@@ -101,12 +119,12 @@ def process_image(image: PIL.Image.Image, settings: Settings) -> bytes:
     data: bytes
     if settings.compression_enabled:
         assert settings.compression is not None
-        data = compression.process(image, settings.compression, file_name)
+        data = compression.process(image, settings.compression, file_name, 4)
     else:
         data = backup_get_image_data(image)
     return data
 
-def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
+def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager, stage):
     global stats_image_count_total
     global stats_image_count_success
     global stats_image_count_failed
@@ -124,7 +142,7 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     # for the queues, 'None' is an finish-flag
     in_queue: Queue[PIL.Image.Image|None] = Queue(maxsize=8)
     # no max size for err_queue, should not fill up
-    err_queue: Queue[tuple[PIL.Image.Image,Exception]] = Queue()
+    err_queue: Queue[tuple[PIL.Image.Image,Exception, int]] = Queue()
     out_queue: Queue[tuple[str,bytes]|None] = Queue(maxsize=8)
 
     # setup a shared error output directory
@@ -174,7 +192,7 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
                 err: Exception
                 image, err = err_queue.get(timeout=0.01)
                 print('file io: handling error')
-                save_errored_image(image, err, err_dir)
+                save_errored_image(image, err, err_dir, stage)
             except ValueError:
                 return
             except queue.Empty:
@@ -262,12 +280,14 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
             # handle each processing-step's errors
             except compression.CompressionError as e:
                 print(f'COMPRESSION error on file {file_name}: {e}')
-                err_queue.put((image, e))
+                err_queue.put((image, e, stage))
+            
             # TODO: HANDLE ERRORS FROM ALL TYPES OF process-steps
-            # generic error handling
+            # TODO: error catchall gets even catchier! maybe i should wake up early tomorrow and add errors to other people's code but i got lazy, in theory should do the folders right
             except Exception as e:
+                err_stage = getattr(e, 'stage', ERR_UNKNOWN)
                 print(f'UNEXPECTED Exception {e} Occurred')
-                err_queue.put((image, e))
+                err_queue.put((image, e, stage))
 
     # TODO: fix deadlock bug on final images from input queue
     subprocess_count = 1
@@ -279,17 +299,18 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     print('processing process started')
             
 ## @brief saves an image that failed processing into the error folder and counts it as failed
-def save_errored_image(image: PIL.Image.Image, err: Exception, err_dir: FolderManager) -> None:
+def save_errored_image(image: PIL.Image.Image, err: Exception, err_dir: FolderManager, curr_stage: int) -> None:
     global stats_image_count_failed
     # TODO: save each type of processing-step error to a different dir
     try:
         file_name: str = getattr(image, 'filename')
         file_name = Path(file_name).stem + 'jpg'
         data: bytes = backup_get_image_data(image)
-        err_dir.write_file(file_name, data)
+        err_dir.write_file((Path(err_dir[curr_stage]) / file_name), data)
     except Exception as e:
         print(f"could not save the errored image: {e}")
     stats_image_count_failed += 1
+
 def backup_get_image_data(image: PIL.Image.Image) -> bytes:
     if image.mode != 'RGB':
         image = image.convert('RGB')
