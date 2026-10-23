@@ -117,6 +117,26 @@ class FolderManager:
             count += 1
         return count
 
+    def write_file_subfolder(self, subdir_name: str, file_name: str, data: bytes):
+        assert self.path is not None
+        if not self.path.exists():
+            self.path.mkdir()
+        sub_path = self.path.joinpath(subdir_name)
+        if not sub_path.exists():
+            sub_path.mkdir()
+
+        # file_name might be naughty and have a relative filepath
+        # convert to and from Path type to cleanse it
+        file_path: Path = Path(file_name)
+        file_name = file_path.name
+
+        file_path = sub_path.joinpath(file_name)
+
+        # open writer in exclusive-creation (x) for bytes (b)
+        writer: io.BufferedWriter = open(file_path, 'xb')
+        writer.write(data)
+        writer.close()
+
     # TODO: make accept data as io.ReadableStream
     ## @brief Writes some bytes to a given file_name in this folder
     def write_file(self, file_name: str, data: bytes) -> None:
