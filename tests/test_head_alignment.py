@@ -1,97 +1,83 @@
+import unittest
+from PIL.Image import Image
 
-# this makes the module to test importable
-import os
-import sys
-import PIL.Image
-import PIL.ImageOps
-
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-outer_dir = os.path.dirname(current_dir)
-sys.path.append(outer_dir)
+from test_lib import images_jpg_single_dir, test_preset_list
 
 import head_alignment
 
-# constants
-images_src_dir: str = 'images'
-images_jpg_dir: str = os.path.join(images_src_dir, 'jpeg')
-images_png_dir: str = os.path.join(images_src_dir, 'png')
-images_failures_dir: str = os.path.join(images_src_dir, 'head_alignment_specific')
-images_output_dir: str = os.path.join(images_src_dir, 'output')
-
+# standard preset that will work for testing
 standard_align_preset = head_alignment.HeadAlignmentSettings(
-    name="standard_align_preset",
-    head_x = 0.5,
-    head_y = 0.85,
+    name='standard',
+    head_x=0.5,
+    head_y=0.85
 )
 
-
+# head position that is expected to be to low and will reflect the person
 bad_reflect_preset = head_alignment.HeadAlignmentSettings(
-    name="fail_alignment_preset",
-    head_x = 0.5,
-    head_y = 0.58,
+    name='bad_reflect',
+    head_x=0.5,
+    head_y=0.58
 )
-
 
 presets = [standard_align_preset]
 fail_presets = [bad_reflect_preset]
 
-# Takes files from the jpeg directory and outputs the result to the output directory
-def alignment_test():
-    # Ensure the output directory exists
-    os.makedirs(images_output_dir, exist_ok=True)
 
-    with head_alignment.create_pose_landmarker() as landmarker:
-        for filename in os.listdir(images_jpg_dir):
+## @brief Tests head alignment on JPEG images
+#
+# This does several checks on the images:
+#   1. output is a Pillow image
+#   2. output image aspect ratio matches the input
+#   3. output is in standard RGB mode
+#   4. (implicitly) alignment doesnt throw errors
+class TestHeadAlignment(unittest.TestCase):
+    ## @brief Runs alignment on an image and checks the result
+    # @param self This test object
+    # @param image The image to align
+    # @param settings The settings to apply when aligning
+    def align_image(self,
+                    image: Image,
+                    settings: head_alignment.HeadAlignmentSettings
+                    ) -> None:
+        original_ratio = image.width / image.height
+        result_image = head_alignment.process(image, settings)
 
-            input_path = os.path.join(images_jpg_dir, filename)
-            output_path = os.path.join(images_output_dir, filename)
+        # Ensure the function returned a Pillow Image
+        self.assertIsInstance(result_image, Image)
 
-            # Skip subdirectories or non-file entries if any exist inside jpeg/
-            if not os.path.isfile(input_path):
-                continue
+        # Ensure the output image keeps the same aspect ratio
+        self.assertAlmostEqual(original_ratio, result_image.width / result_image.height, 2)
 
-            try:
-                image = PIL.Image.open(input_path)
-                image = PIL.ImageOps.exif_transpose(image)
+        # Ensure the final output is in standard RGB mode
+        self.assertEqual(result_image.mode, "RGB")
 
-                # Process alignment
-                result = head_alignment.process(image, standard_align_preset)
-                result.save(output_path)
-                print(f"Processed: {filename}")
+    ## @brief Check that alignment with an impossible head position fails
+    # @param self This test object
+    # @param image The image to align
+    # @param settings The alignment settings to apply
+    def align_image_fail(self,
+                         image: Image,
+                         settings: head_alignment.HeadAlignmentSettings
+                         ) -> None:
 
-            except Exception as e:
-                print(f"Skipped {filename}: {e}")
+        # expect alignment to raise an error, fail the test if not
+        with self.assertRaises(Exception):
+            head_alignment.process(image, settings)
 
+        print('threw as expected')
+        image.close()
 
-# Takes files from the jpeg directory and outputs the result to the output directory
-def fail_alignment_test():
-    # Ensure the output directory exists
-    os.makedirs(images_output_dir, exist_ok=True)
+    ## @brief Tests alignment on input JPEG filetype
+    # @param self This test object
+    def test_align_jpg(self):
+        test_preset_list(images_jpg_single_dir, presets, self.align_image)
 
-    with head_alignment.create_pose_landmarker() as landmarker:
-        for filename in os.listdir(images_jpg_dir):
-
-            input_path = os.path.join(images_jpg_dir, filename)
-            output_path = os.path.join(images_output_dir, filename)
-
-            # Skip subdirectories or non-file entries if any exist inside jpeg/
-            if not os.path.isfile(input_path):
-                continue
-
-            try:
-                image = PIL.Image.open(input_path)
-                image = PIL.ImageOps.exif_transpose(image)
-
-                # Process alignment
-                result = head_alignment.process(image, bad_reflect_preset)
-                result.save(output_path)
-                print(f"Processed: {filename}")
-
-            except Exception as e:
-                print(f"Skipped {filename}: {e}")
+    ## @brief Tests that alignment with impossible settings does fail
+    # @param self This test object
+    def test_failure(self):
+        test_preset_list(images_jpg_single_dir, fail_presets, self.align_image_fail)
 
 
-if __name__ == "__main__":
-    alignment_test()
-    fail_alignment_test()
+# allow to run tests individually
+if __name__ == '__main__':
+    unittest.main()
