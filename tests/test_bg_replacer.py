@@ -1,7 +1,6 @@
 import unittest
 import PIL.Image
 import numpy as np
-import rembg
 
 from test_lib import images_jpg_single_dir, test_folder
 
@@ -14,7 +13,7 @@ preset = bg_replacer.BackgroundSettings(
     background_rgb=(204, 0, 204),  # Pink background
     intensity="natural",
     white_pt=None,
-    model_name='unet'
+    model_name='u2net'
 )
 
 class TestBgReplacerValidation(unittest.TestCase):
@@ -66,12 +65,6 @@ class TestBgReplacerValidation(unittest.TestCase):
 
 
 class TestBgReplacer(unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        """This runs exactly once before any tests in this class start."""
-        print("\nLoading AI model for integration tests...")
-        cls.session = rembg.new_session("birefnet-portrait")
 
     def replace_background_execution(self, image: PIL.Image.Image, settings: bg_replacer.BackgroundSettings):
         """Tests that the main function processes an image and returns a valid output."""
