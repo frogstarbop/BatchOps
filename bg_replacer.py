@@ -56,8 +56,6 @@ SHADOW_PRESETS = {
 DEFAULT_INTENSITY = "natural"
 
 # --- Hardware acceleration: ONNX Runtime execution providers ---
-# Needs: pip install onnxruntime-openvino  (Intel CPUs and GPUs, any OS)
-OPENVINO_PROVIDER = "OpenVINOExecutionProvider"
 
 # Needs: pip install onnxruntime-directml  (any GPU on Windows)
 DML_PROVIDER = "DmlExecutionProvider"
@@ -66,30 +64,35 @@ DML_DEVICE_ID = 0  # Which GPU DirectML uses; default is 0
 # Plain ONNX Runtime CPU provider, always available
 CPU_PROVIDER = "CPUExecutionProvider"
 
+
+## @brief Checks whether a session is running on a GPU provider or CPU provider
+#
+# @param session A rembg session
+# @returns True if the first active provider is not the CPU provider
+def runs_on_gpu(session: BaseSession) -> bool:
+    return session.inner_session.get_providers()[0] != CPU_PROVIDER
+
 ## @brief Builds the provider priority list for the requested hardware
 #
 # @param hardware "gpu" or "cpu"
 # @returns A list of provider names or (name, options) tuples, in priority order
-def _select_providers(hardware: str) -> list:
+def select_providers(hardware: str) -> list:
     import onnxruntime
 
     if hardware not in ("gpu", "cpu"):
         raise ValueError(f"device must be 'gpu' or 'cpu', got {hardware!r}")
 
     available = onnxruntime.get_available_providers()
+
+    # get the provider
     providers = []
-
     if hardware == "gpu":
-        if OPENVINO_PROVIDER in available:
-            providers.append((OPENVINO_PROVIDER, {"device_type": "GPU"}))
         if DML_PROVIDER in available:
-            providers.append((DML_PROVIDER, {"device_id": DML_DEVICE_ID, "arena_extend_strategy": "kSameAsRequested"}))
-        if not providers:
-            print("No GPU provider available, falling back to CPU")
-
-    # CPU requested, or no GPU provider was found
-    if not providers and OPENVINO_PROVIDER in available:
-        providers.append((OPENVINO_PROVIDER, {"device_type": "CPU"}))
+            providers.append(
+                (DML_PROVIDER, {"device_id": DML_DEVICE_ID, "arena_extend_strategy": "kSameAsRequested"})
+            )
+        else:
+            print("DirectML provider not available, falling back to CPU")
 
     providers.append(CPU_PROVIDER)
     return providers
@@ -106,7 +109,7 @@ def create_session(model_name: str, hardware: str) -> BaseSession:
     import onnxruntime
     import rembg
 
-    providers = _select_providers(hardware)
+    providers = select_providers(hardware)
     print(f"Using providers: {providers}")
 
     # Memory-saving options
@@ -255,7 +258,7 @@ def estimate_white_point(luminance: np.ndarray, mask: np.ndarray) -> float:
 # @returns An (H, W) float mask where 1.0 is subject and 0.0 is background
 # @raises TypeError If session is not a rembg session, since rembg would silently load a default model
 #                   for None and fail confusingly for anything else (such as a model name)
-def extract_mask(image: PIL.Image.Image, session: BaseSession) -> np.ndarray:
+def extract_mask(image: PIL.Image.Image, session: BaseSession, settings: BackgroundSettings) -> np.ndarray:
     import rembg
     from rembg.sessions.base import BaseSession
 
@@ -264,7 +267,28 @@ def extract_mask(image: PIL.Image.Image, session: BaseSession) -> np.ndarray:
             f"session must be created with rembg.new_session(<model name>), got {type(session).__name__}"
         )
 
-    mask_image = rembg.remove(image, session=session, only_mask=True)
+    # try get the mask with the session
+    try:
+        mask_image = rembg.remove(
+            image,
+            session=session,
+            only_mask=True
+        )
+    except Exception as e:
+        # If we were already on CPU, fail immediately with a specific message
+        if not runs_on_gpu(session):
+            raise RuntimeError(f"Failed to run on CPU: {e}") from e
+
+        # Otherwise fallback to using CPU
+        print(f"GPU inference failed during mask extraction ({e}). Retrying with CPU...")
+        cpu_session = create_session(settings.model_name, "cpu")
+
+        # Catch errors during the fallback attempt
+        try:
+            mask_image = rembg.remove(image, session=cpu_session, only_mask=True)
+        except Exception as cpu_e:
+            raise RuntimeError(f"Failed to run on CPU during fallback attempt: {cpu_e}") from cpu_e
+
     return np.array(mask_image, dtype=np.float32) / MAX_PIXEL_VALUE
 
 
@@ -322,7 +346,7 @@ def process(image: PIL.Image.Image,
             ) -> PIL.Image.Image:
 
     # Session is created once every time
-    session = create_session("bria-rmbg", "gpu")
+    session = create_session(settings.model_name, "gpu")
 
     background_rgb: tuple[int, int, int] = settings.background_rgb
     intensity: str = settings.intensity
@@ -339,7 +363,7 @@ def process(image: PIL.Image.Image,
 
     rgb_image = image.convert("RGB")
     fg_srgb = image_to_array(rgb_image)
-    mask = extract_mask(rgb_image, session)
+    mask = extract_mask(rgb_image, session, settings)
 
     luminance = to_luminance(fg_srgb)
     if white_pt is None:
