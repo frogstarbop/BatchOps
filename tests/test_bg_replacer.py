@@ -1,20 +1,21 @@
 import unittest
-import PIL.Image
+from PIL.Image import Image, new as image_new
 import numpy as np
-
-from test_lib import images_jpg_single_dir, test_folder
+from test_lib import images_jpg_single_dir, test_preset_list
 
 # the module to test
 import bg_replacer
 
 
-preset = bg_replacer.BackgroundSettings(
-    name='stest',
+standard_replace_bg_preset = bg_replacer.BackgroundSettings(
+    name='bg_test',
     background_rgb=(204, 0, 204),  # Pink background
     intensity="natural",
     white_pt=None,
     model_name='u2net'
 )
+
+presets = [standard_replace_bg_preset]
 
 class TestBgReplacerValidation(unittest.TestCase):
 
@@ -44,19 +45,19 @@ class TestBgReplacerValidation(unittest.TestCase):
 
     def test_validate_opaque_valid(self):
         # Create a simple RGB image (no alpha channel)
-        img = PIL.Image.new("RGB", (10, 10), (255, 255, 255))
+        img = image_new("RGB", (10, 10), (255, 255, 255))
         # Should not raise an error
         bg_replacer.validate_opaque(img)
 
     def test_validate_opaque_invalid(self):
         # Create an RGBA image with a transparent pixel
-        img = PIL.Image.new("RGBA", (10, 10), (255, 255, 255, 0))
+        img = image_new("RGBA", (10, 10), (255, 255, 255, 0))
         with self.assertRaises(ValueError):
             bg_replacer.validate_opaque(img)
 
     def test_image_to_array(self):
         # Tests that images convert into normalized 0.0-1.0 float arrays
-        img = PIL.Image.new("RGB", (2, 2), (0, 127, 255))
+        img = image_new("RGB", (2, 2), (0, 127, 255))
         arr = bg_replacer.image_to_array(img)
 
         self.assertEqual(arr.shape, (2, 2, 3))
@@ -66,7 +67,10 @@ class TestBgReplacerValidation(unittest.TestCase):
 
 class TestBgReplacer(unittest.TestCase):
 
-    def replace_background_execution(self, image: PIL.Image.Image, settings: bg_replacer.BackgroundSettings):
+    def replace_background_execution(self,
+                                     image: Image,
+                                     settings: bg_replacer.BackgroundSettings
+                                     ) -> None :
         """Tests that the main function processes an image and returns a valid output."""
 
         # If the image is missing, PIL will raise a FileNotFoundError and fail the test,
@@ -74,7 +78,7 @@ class TestBgReplacer(unittest.TestCase):
         result_image = bg_replacer.process(image, settings)
 
         # Ensure the function returned a Pillow Image
-        self.assertIsInstance(result_image, PIL.Image.Image)
+        self.assertIsInstance(result_image, Image)
 
         # Ensure the output image dimensions match the input exactly
         self.assertEqual(result_image.size, original_size)
@@ -83,7 +87,7 @@ class TestBgReplacer(unittest.TestCase):
         self.assertEqual(result_image.mode, "RGB")
 
     def test_replace_works_jpg(self):
-        test_folder(images_jpg_single_dir, preset, self.replace_background_execution)
+        test_preset_list(images_jpg_single_dir, presets, self.replace_background_execution)
 
 if __name__ == '__main__':
     unittest.main()
