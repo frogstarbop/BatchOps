@@ -85,11 +85,12 @@ CMakeLists.txt.user*
 !tests/
 
 # Python build or temp files
-venv/
+*venv/
 v/
-
+.venv/*
 # images which may be private IP
 tests/images/
 dist/widget
-widget.spec
+*.spec
 dist/*
+.venv/

@@ -3,6 +3,7 @@ import os
 import time
 import PIL.Image
 import PIL.ImageOps
+import traceback
 import threading
 import queue
 from multiprocessing import Process, Queue
@@ -154,142 +155,122 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     # instead of reading the whole input folder into the input queue immediately
     # also handles updating stat image counts
     def file_IO_looper():
-        nonlocal in_queue
-        nonlocal out_queue
-        nonlocal err_queue
-        nonlocal fin_flag
-        nonlocal in_iter
-        nonlocal err_dir
-        nonlocal subprocess_count
         global stats_image_count_failed
         global stats_image_count_success
 
         print('file io: starting')
 
-        def flush_errs():
-            nonlocal err_queue
-            nonlocal err_dir
-            try:
-                image: PIL.Image.Image
-                err: Exception
-                image, err = err_queue.get(timeout=0.01)
-                print('file io: handling error')
-                save_errored_image(image, err, err_dir)
-            except ValueError:
-                return
-            except queue.Empty:
-                return
+        # drains every waiting error, not just one
+        def flush_errs(timeout: float):
+            while True:
+                try:
+                    file_name, message = err_queue.get(timeout=timeout)
+                except queue.Empty:
+                    return
+                print(f'file io: handling error: {message}')
+                save_errored_image(file_name, err_dir)
 
-        sent_stop: bool = False
-        recv_stops: int = 0
+        to_send: list[str | None] = []   # paths (then stop flags) waiting for room in in_queue
+        exhausted = False                # True once the input folder is fully read
+        recv_stops = 0
 
         while True:
-            flush_errs()
-            # prioritize outputting
-            try:
-                item: tuple[str,bytes]|None = out_queue.get(timeout=0.01)
+            flush_errs(0.001)
 
-                # stop once all processes put a fin flag in queue
-                if item == None:
+            # output side
+            try:
+                item = out_queue.get(timeout=0.01)
+                if item is None:
                     recv_stops += 1
                     if recv_stops >= subprocess_count:
+                        flush_errs(0.5)   # errors travel on a separate pipe, give stragglers a moment
                         print('file io looper received fin, stopping')
-                        if not sent_stop:
-                            raise RuntimeError('Receiving stop before send stop')
-                        flush_errs()
                         in_queue.close()
                         err_queue.close()
                         out_queue.close()
                         return
-                    continue
-
-                file_name: str = item[0]
-                data: bytes = item[1]
-                try:
-
-                    out_dir.write_file(file_name, data)
-                    stats_image_count_success += 1
-                    print(f'file io: wrote image {file_name}')
-                except Exception as e:
-                    print(f"file io: failed to write {file_name}:{e}")
-                    stats_image_count_failed += 1
-            except ValueError:
-                pass
+                else:
+                    file_name, data = item
+                    try:
+                        out_dir.write_file(file_name, data)
+                        stats_image_count_success += 1
+                        print(f'file io: wrote image {file_name}')
+                    except Exception as e:
+                        print(f"file io: failed to write {file_name}:{e}")
+                        stats_image_count_failed += 1
             except queue.Empty:
                 pass
-            if not sent_stop:
+
+            # input side: never block on a full in_queue
+            if not exhausted and not to_send:
                 try:
-                    image: PIL.Image.Image = next(in_iter)
-                    file_name = getattr(image, 'filename')
-                    assert file_name is not None
-                    print(f'file io: read image {file_name}')
-                    in_queue.put(image)
+                    image = next(in_iter)
+                    to_send.append(image.filename)
+                    image.close()
                 except StopIteration:
-                    for i in range(subprocess_count):
-                        in_queue.put(fin_flag)
-                    sent_stop = True
-            else:
-                # nothing to do, sleep for a short while
-                time.sleep(QUEUE_SHORT_SLEEP_SECONDS)
+                    to_send.extend([fin_flag] * subprocess_count)
+                    exhausted = True
+
+            if to_send:
+                try:
+                    in_queue.put_nowait(to_send[0])
+                    to_send.pop(0)
+                except queue.Full:
+                    pass
 
     file_IO_thread: threading.Thread = threading.Thread(target=file_IO_looper)
     file_IO_thread.start()
     print('file io thread started')
 
-    def processing_looper(in_queue: Queue, err_queue: Queue, out_queue: Queue, settings: Settings):
-        print('processing looper: started')
-
-        while True:
-            image: PIL.Image.Image|None = in_queue.get()
-
-            # if receive fin flag, processing complete
-            if image is None:
-                # put fin flag into output queue to let other threads know
-                out_queue.put(None)
-                print('processing looper: recieved fin flag')
-                return
-
-            file_name:str = getattr(image, 'filename')
-            assert file_name is not None
-            print(f'processing received {file_name}')
-            try:
-                data = process_image(image, settings)
-
-                out_name = Path(file_name).stem + '.jpg'
-
-                # wait for a space in the output queue to put the image
-                out_queue.put((out_name, data))
-            # handle each processing-step's errors
-            except compression.CompressionError as e:
-                print(f'COMPRESSION error on file {file_name}: {e}')
-                err_queue.put((image, e))
-            # TODO: HANDLE ERRORS FROM ALL TYPES OF process-steps
-            # generic error handling
-            except Exception as e:
-                print(f'UNEXPECTED Exception {e} Occurred')
-                err_queue.put((image, e))
-
     # TODO: fix deadlock bug on final images from input queue
     subprocess_count = 1
-    multiprocessing.set_start_method("fork", force=True)
+    # multiprocessing.set_start_method("spawn", force=True) is necessary for Windows to avoid issues with forking processes. It ensures that each subprocess starts fresh and can properly import the necessary modules.
+    # It is also necessary to avoid conflicts with older versions of Python, when using fork on 3.14>, nested functions can't be pickled.
+    multiprocessing.set_start_method("spawn", force=True)
 
+    # start the processing subprocesses
     for i in range(subprocess_count):
         processing_thread: Process = Process(target=processing_looper, args=(in_queue, err_queue, out_queue, settings))
         processing_thread.start()
     print('processing process started')
             
+
+
+
+## @brief Worker process entry point. Must be top-level so spawn can pickle it by name
+def processing_looper(in_queue, err_queue, out_queue, settings: Settings):
+    print('processing looper: started')
+
+    while True:
+        file_name = in_queue.get()
+
+        if file_name is None:
+            out_queue.put(None)
+            print('processing looper: received fin flag')
+            return
+
+        print(f'processing received {file_name}')
+        try:
+            with PIL.Image.open(file_name) as image:
+                data = process_image(image, settings)
+            out_queue.put((Path(file_name).stem + '.jpg', data))
+        except Exception as e:
+            # Provide a descriptive error message and traceback for debugging purposes. The error is also sent to the error queue for further handling.
+            print(f'Exception on {file_name}:\n{traceback.format_exc()}')
+            err_queue.put((file_name, str(e)))   # strings pickle safely, exceptions don't always
+
+
 ## @brief saves an image that failed processing into the error folder and counts it as failed
-def save_errored_image(image: PIL.Image.Image, err: Exception, err_dir: FolderManager) -> None:
+def save_errored_image(file_name: str, err_dir: FolderManager) -> None:
     global stats_image_count_failed
-    # TODO: save each type of processing-step error to a different dir
     try:
-        file_name: str = getattr(image, 'filename')
-        file_name = Path(file_name).stem + 'jpg'
-        data: bytes = backup_get_image_data(image)
-        err_dir.write_file(file_name, data)
+        with PIL.Image.open(file_name) as image:
+            err_dir.write_file(Path(file_name).stem + '.jpg', backup_get_image_data(image))
     except Exception as e:
         print(f"could not save the errored image: {e}")
     stats_image_count_failed += 1
+
+
 def backup_get_image_data(image: PIL.Image.Image) -> bytes:
     if image.mode != 'RGB':
         image = image.convert('RGB')
