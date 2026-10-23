@@ -252,6 +252,7 @@ class Widget(QWidget):
                 
                 self.edit_presets_window = EditPresetsWidget(self)
                 self.edit_presets_window.show()
+                centre_on_screen(self.edit_presets_window)
                 self.hide()
 
         ## @brief Defines the interaction for the select file button
@@ -479,8 +480,16 @@ class Widget(QWidget):
                 from credits import Widget as CreditsWidget
                 self.credits_window = CreditsWidget(self)
                 self.credits_window.show()
+                centre_on_screen(self.credits_window)
                 self.hide()
-                
+                   ## @brief Moves a window to the centre of the screen it is on
+
+def centre_on_screen(window: QWidget) -> None:
+        screen = window.screen() or QApplication.primaryScreen()
+        frame = window.frameGeometry()
+        frame.moveCenter(screen.availableGeometry().center())
+        window.move(frame.topLeft())   
+          
 ## @brief Creates a loading window with a progress bar and status label
 def make_loading_window():
         window = QWidget()
@@ -497,6 +506,7 @@ def make_loading_window():
         layout.addWidget(bar)
         window.setFixedSize(320, 100)
         window.show()
+        centre_on_screen(window)
         return window, status_label
 
 ## @brief Reports a message to the console and updates the status label in the loading window
@@ -576,6 +586,7 @@ if __name__ == "__main__":
                 install_desktop_entry()
                 widget = Widget()
                 widget.show()
+                centre_on_screen(widget)
                 loading.close()
 
         # Start a timer to periodically check if the import thread has finished. The timer will call finish_startup() every 50 milliseconds.
@@ -583,3 +594,5 @@ if __name__ == "__main__":
         timer.timeout.connect(finish_startup)
         timer.start(50)  # Check every 100 ms
         sys.exit(app.exec())
+
+
