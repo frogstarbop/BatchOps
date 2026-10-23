@@ -1,16 +1,21 @@
 import unittest
 import PIL.Image
 import numpy as np
-import os
-import sys
+import rembg
 
-# this makes the module to test importable
-current_dir = os.path.dirname(os.path.abspath(__file__))
-outer_dir = os.path.dirname(current_dir)
-sys.path.append(outer_dir)
+from test_lib import images_jpg_single_dir, test_folder
 
 # the module to test
 import bg_replacer
+
+
+preset = bg_replacer.BackgroundSettings(
+    name='stest',
+    background_rgb=(204, 0, 204),  # Pink background
+    intensity="natural",
+    white_pt=None,
+    model_name='unet'
+)
 
 class TestBgReplacerValidation(unittest.TestCase):
 
@@ -58,6 +63,34 @@ class TestBgReplacerValidation(unittest.TestCase):
         self.assertEqual(arr.shape, (2, 2, 3))
         self.assertTrue(np.max(arr) <= 1.0)
         self.assertTrue(np.min(arr) >= 0.0)
+
+
+class TestBgReplacer(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        """This runs exactly once before any tests in this class start."""
+        print("\nLoading AI model for integration tests...")
+        cls.session = rembg.new_session("birefnet-portrait")
+
+    def replace_background_execution(self, image: PIL.Image.Image, settings: bg_replacer.BackgroundSettings):
+        """Tests that the main function processes an image and returns a valid output."""
+
+        # If the image is missing, PIL will raise a FileNotFoundError and fail the test,
+        original_size = image.size
+        result_image = bg_replacer.process(image, settings)
+
+        # Ensure the function returned a Pillow Image
+        self.assertIsInstance(result_image, PIL.Image.Image)
+
+        # Ensure the output image dimensions match the input exactly
+        self.assertEqual(result_image.size, original_size)
+
+        # Ensure the final output is in standard RGB mode
+        self.assertEqual(result_image.mode, "RGB")
+
+    def test_replace_works_jpg(self):
+        test_folder(images_jpg_single_dir, preset, self.replace_background_execution)
 
 if __name__ == '__main__':
     unittest.main()
