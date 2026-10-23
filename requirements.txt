@@ -7,3 +7,5 @@ mediapipe
 
 # Only needed to build the executable
 pyinstaller
+
+onnxruntime-directml
