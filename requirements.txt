@@ -1,9 +1,11 @@
 # Runtime
 PySide6
-Pillow>=10.1
+Pillow>=12.1.0,<13.0.0
 numpy
 rembg[cpu]
 mediapipe
 
 # Only needed to build the executable
 pyinstaller
+
+onnxruntime-directml
