@@ -20,6 +20,22 @@ import cropping
 QUEUE_WAITING_SLEEP_SECONDS: float = 0.05
 QUEUE_SHORT_SLEEP_SECONDS: float = 0.01
 
+### Error Flags ###
+# Relevant flags for errors at x stage
+ERR_UNKNOWN = 0
+ERR_BGREM = 1
+ERR_HEADALG = 2
+ERR_CROPPING = 3
+ERR_COMPRESSION = 4
+
+err_dir = {
+    ERR_UNKNOWN: 'unknown',
+    ERR_BGREM: 'bgrem',
+    ERR_HEADALG: 'headalg',
+    ERR_CROPPING: 'cropping',
+    ERR_COMPRESSION: 'compression'
+}
+
 ### stats section ###
 # statistics to show for ui
 stats_image_count_total = 0
@@ -85,15 +101,15 @@ def process_image(image: PIL.Image.Image, settings: Settings) -> bytes:
 
     if settings.bg_removal_enabled:
         assert settings.bg_removal is not None
-        image = bg_removal.process(image, settings.bg_removal)
+        image = bg_removal.process(image, settings.bg_removal, 1)
 
     if settings.head_alignment_enabled:
         assert settings.head_alignment is not None
-        image = head_alignment.process(image, settings.head_alignment)
+        image = head_alignment.process(image, settings.head_alignment, 2)
 
     if settings.cropping_enabled:
         assert settings.cropping is not None
-        image = cropping.process(image, settings.cropping)
+        image = cropping.process(image, settings.cropping, 3)
 
     # JPEG can't store transparency or palettes
     if image.mode != 'RGB':
@@ -102,12 +118,12 @@ def process_image(image: PIL.Image.Image, settings: Settings) -> bytes:
     data: bytes
     if settings.compression_enabled:
         assert settings.compression is not None
-        data = compression.process(image, settings.compression, file_name)
+        data = compression.process(image, settings.compression, file_name, 4)
     else:
         data = backup_get_image_data(image)
     return data
 
-def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
+def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager, curr_stage: int):
     global stats_image_count_total
     global stats_image_count_success
     global stats_image_count_failed
@@ -168,7 +184,7 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
                 except queue.Empty:
                     return
                 print(f'file io: handling error: {message}')
-                save_errored_image(file_name, err_dir)
+                save_errored_image(file_name, err_dir, curr_stage)
 
         to_send: list[str | None] = []   # paths (then stop flags) waiting for room in in_queue
         exhausted = False                # True once the input folder is fully read
@@ -235,10 +251,8 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     print('processing process started')
             
 
-
-
 ## @brief Worker process entry point. Must be top-level so spawn can pickle it by name
-def processing_looper(in_queue, err_queue, out_queue, settings: Settings):
+def processing_looper(in_queue, err_queue, out_queue, settings: Settings, curr_stage: int):
     print('processing looper: started')
 
     while True:
@@ -256,12 +270,13 @@ def processing_looper(in_queue, err_queue, out_queue, settings: Settings):
             out_queue.put((Path(file_name).stem + '.jpg', data))
         except Exception as e:
             # Provide a descriptive error message and traceback for debugging purposes. The error is also sent to the error queue for further handling.
+            err_stage = getattr(e, 'curr_stage', ERR_UNKNOWN)
             print(f'Exception on {file_name}:\n{traceback.format_exc()}')
-            err_queue.put((file_name, str(e)))   # strings pickle safely, exceptions don't always
+            err_queue.put((file_name, str(e), curr_stage))   # strings pickle safely, exceptions don't always
 
 
 ## @brief saves an image that failed processing into the error folder and counts it as failed
-def save_errored_image(file_name: str, err_dir: FolderManager) -> None:
+def save_errored_image(file_name: str, err_dir: FolderManager, curr_stage: int) -> None:
     global stats_image_count_failed
     try:
         with PIL.Image.open(file_name) as image:
