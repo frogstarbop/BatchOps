@@ -335,17 +335,15 @@ def composite(
 #
 # @param image The portrait to process, already upright (EXIF rotation is not applied here)
 # @param settings The background removal settings to apply
-# @param session A rembg session from create_session(), required so the model is loaded once, not per image
 # @returns The new RGB image, same size as the input
 # @raises ValueError If the colour is invalid, the image has transparency, intensity is unknown,
 #                    or white_pt cannot be estimated or is not above the preset's black point
 #                    and at most 1.0
-# @raises TypeError If session is not a rembg session
 def process(image: PIL.Image.Image,
             settings: BackgroundSettings,
             ) -> PIL.Image.Image:
 
-    # Session is created once every time
+    # TODO: Create the session once and pass it in, instead of creating a new one every time process is called
     session = create_session(settings.model_name, "gpu")
 
     background_rgb: tuple[int, int, int] = settings.background_rgb

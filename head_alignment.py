@@ -241,6 +241,7 @@ def process(image: Image.Image, settings: HeadAlignmentSettings) -> Image.Image:
     width, height = image.size
     image = image.crop((2, 2, width - 2, height - 2))
 
+    # TODO: Create the pose landmarker once and pass it in, instead of creating a new one every time process is called
     landmarker = create_pose_landmarker()
 
     image_array = np.asarray(image.convert("RGB"))
