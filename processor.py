@@ -71,7 +71,7 @@ def get_estimated_time_left() -> int:
 # splitting image processing from the queue for obv reasons
 # will throw any errors faced during processing step running
 # settings -> error handling
-def process_image(image: PIL.Image.Image, settings: Settings) -> bytes:
+def process_image(image: PIL.Image.Image, settings: Settings) -> tuple[bool, bytes, str]:
     file_name: str | None = getattr(image, 'filename', None)
     assert file_name is not None
 
@@ -85,15 +85,27 @@ def process_image(image: PIL.Image.Image, settings: Settings) -> bytes:
 
     if settings.bg_removal_enabled:
         assert settings.bg_removal is not None
-        image = bg_removal.process(image, settings.bg_removal)
+        try:
+            image = bg_removal.process(image, settings.bg_removal)
+        except Exception as e:
+            print(e)
+            return False, bytes(0), 'background_removal'
 
     if settings.head_alignment_enabled:
         assert settings.head_alignment is not None
-        image = head_alignment.process(image, settings.head_alignment)
+        try:
+            image = head_alignment.process(image, settings.head_alignment)
+        except Exception as e:
+            print(e)
+            return False, bytes(0), 'head_alignment'
 
     if settings.cropping_enabled:
         assert settings.cropping is not None
-        image = cropping.process(image, settings.cropping)
+        try:
+            image = cropping.process(image, settings.cropping)
+        except Exception as e:
+            print(e)
+            return False, bytes(0), 'head_alignment'
 
     # JPEG can't store transparency or palettes
     if image.mode != 'RGB':
@@ -102,10 +114,16 @@ def process_image(image: PIL.Image.Image, settings: Settings) -> bytes:
     data: bytes
     if settings.compression_enabled:
         assert settings.compression is not None
-        data = compression.process(image, settings.compression, file_name)
+        print('running compression')
+        try:
+            data = compression.process(image, settings.compression, file_name)
+            print('compression succeeded')
+        except Exception as e:
+            print(e)
+            return False, bytes(0), 'compression'
     else:
         data = backup_get_image_data(image)
-    return data
+    return True, data, ''
 
 def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     global stats_image_count_total
@@ -125,7 +143,7 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
     # for the queues, 'None' is an finish-flag
     in_queue: Queue[PIL.Image.Image|None] = Queue(maxsize=8)
     # no max size for err_queue, should not fill up
-    err_queue: Queue[tuple[PIL.Image.Image,Exception]] = Queue()
+    err_queue: Queue[tuple[PIL.Image.Image,str]] = Queue()
     out_queue: Queue[tuple[str,bytes]|None] = Queue(maxsize=8)
 
     # setup a shared error output directory
@@ -164,11 +182,10 @@ def process(settings: Settings, in_dir: FolderManager, out_dir: FolderManager):
         def flush_errs(timeout: float):
             while True:
                 try:
-                    file_name, message = err_queue.get(timeout=timeout)
+                    file_name, errsub_dir = err_queue.get(timeout=timeout)
+                    save_errored_image(file_name, errsub_dir, err_dir)
                 except queue.Empty:
                     return
-                print(f'file io: handling error: {message}')
-                save_errored_image(file_name, err_dir)
 
         to_send: list[str | None] = []   # paths (then stop flags) waiting for room in in_queue
         exhausted = False                # True once the input folder is fully read
@@ -252,8 +269,12 @@ def processing_looper(in_queue, err_queue, out_queue, settings: Settings):
         print(f'processing received {file_name}')
         try:
             with PIL.Image.open(file_name) as image:
-                data = process_image(image, settings)
-            out_queue.put((Path(file_name).stem + '.jpg', data))
+                success, data, error_subdir = process_image(image, settings)
+                print(f'{success} {error_subdir}')
+                if not success:
+                    err_queue.put((file_name, error_subdir))
+                else:
+                    out_queue.put((Path(file_name).stem + '.jpg', data))
         except Exception as e:
             # Provide a descriptive error message and traceback for debugging purposes. The error is also sent to the error queue for further handling.
             print(f'Exception on {file_name}:\n{traceback.format_exc()}')
@@ -261,11 +282,13 @@ def processing_looper(in_queue, err_queue, out_queue, settings: Settings):
 
 
 ## @brief saves an image that failed processing into the error folder and counts it as failed
-def save_errored_image(file_name: str, err_dir: FolderManager) -> None:
+def save_errored_image(file_name: str, err_sub_dir: str, err_dir: FolderManager) -> None:
     global stats_image_count_failed
+    print(f'error subdir is {err_sub_dir}')
     try:
         with PIL.Image.open(file_name) as image:
-            err_dir.write_file(Path(file_name).stem + '.jpg', backup_get_image_data(image))
+            new_name = Path(file_name).stem + '.jpg'
+            err_dir.write_file_subfolder(err_sub_dir, new_name, backup_get_image_data(image))
     except Exception as e:
         print(f"could not save the errored image: {e}")
     stats_image_count_failed += 1
