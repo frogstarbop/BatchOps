@@ -133,7 +133,7 @@ class Widget (QWidget):
         return f'{time_left} days'
 
     def rotate_gears(self) -> None:
-        self.movie = QMovie('bundled/big_gear_rotating.gif')
+        self.movie = QMovie(os.path.join(os.path.dirname(__file__), "bundled", "big_gear_rotating.gif"))
 
         if not self.movie.isValid():
             print('UI Error: could not find gear')
