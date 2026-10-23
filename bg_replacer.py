@@ -4,8 +4,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import PIL.Image
 import PIL.ImageFilter
-from memory_profiler import profile
-from timer import function_timer
 
 if TYPE_CHECKING:
     from rembg.sessions.base import BaseSession
@@ -319,20 +317,12 @@ def composite(
 #                    or white_pt cannot be estimated or is not above the preset's black point
 #                    and at most 1.0
 # @raises TypeError If session is not a rembg session
-
-@function_timer()
-@profile()
 def process(image: PIL.Image.Image,
             settings: BackgroundSettings,
-            session: BaseSession,
             ) -> PIL.Image.Image:
-    from rembg.sessions.base import BaseSession
 
-    # 1. A session must be provided, created once by the caller with create_session()
-    if not isinstance(session, BaseSession):
-        raise TypeError(
-            f"session must be created with bg_replacer.create_session(<model name>), got {type(session).__name__}"
-        )
+    # Session is created once every time
+    session = create_session("bria-rmbg", "gpu")
 
     background_rgb: tuple[int, int, int] = settings.background_rgb
     intensity: str = settings.intensity
