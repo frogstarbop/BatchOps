@@ -1,70 +1,42 @@
+
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 from PIL import Image
 
-from dataclasses import dataclass
 if TYPE_CHECKING:
     from mediapipe.tasks.python.vision import PoseLandmarker
+
+
 @dataclass
 class HeadAlignmentSettings:
     name: str
     head_x: float
     head_y: float
 
-# Pose landmarks 0-10 are the head: nose, both eyes (inner/centre/outer), both ears and both mouth corners.
-HEAD_LANDMARK_INDICES = range(11)
-_landmarker = None
-
-## @brief Imports mediapipe without letting it load matplotlib
-#
-# mediapipe imports matplotlib.pyplot at module level for drawing helpers this app never uses.
-# That pulls in dateutil and six, which crash under PySide6's import hook, so a placeholder
-# module answers the import instead and is removed again afterwards.
-def _import_mediapipe() -> None:
-    import sys
-    import types
-
-    if "matplotlib" in sys.modules:
-        import mediapipe  # noqa: F401
-        return
-
-    matplotlib = types.ModuleType("matplotlib")
-    pyplot = types.ModuleType("matplotlib.pyplot")
-    matplotlib.pyplot = pyplot
-    sys.modules["matplotlib"] = matplotlib
-    sys.modules["matplotlib.pyplot"] = pyplot
-    try:
-        import mediapipe  # noqa: F401
-    finally:
-        del sys.modules["matplotlib"]
-        del sys.modules["matplotlib.pyplot"]
 ## @brief Creates a MediaPipe pose landmarker
-#
-# The model file must already be on disk, nothing is downloaded. The caller owns the
-# landmarker and should close() it when finished. It is loaded once and reused so that
-# many images can be processed without reloading the model.
+# This is the model that is used to find a person from an image,
+# creating landmark points that can be used to figure out the position of a head.
 #
 # @param model_path Path to a pose landmarker .task model file (lite, full or heavy)
-# @param min_confidence Pose detections / presence scoring below this are ignored (0.0-1.0)
-# @returns A pose landmarker to pass to centre_head()
+# @param min_confidence Detections and presence scoring below this are ignored (0.0-1.0)
+#
+# @returns A pose landmarker to pass to process()
 # @raises FileNotFoundError If there is no model file at model_path
 def create_pose_landmarker(
         model_path:Path = Path(__file__).parent / "bundled" / "pose_landmarker_full.task",
         min_confidence: float = 0.75,
 ):
-    # Import mediapipe in a way that avoids loading matplotlib, which can cause issues with PySide6
-    _import_mediapipe()
     from mediapipe.tasks.python import BaseOptions
-    from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
+    from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions
 
     if not model_path.exists():
         raise FileNotFoundError(f"pose landmarker model not found at {model_path}")
 
     options = PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=str(model_path)),
-        running_mode=RunningMode.IMAGE,
         num_poses=2,  # Only need to know whether there is more than one person
         min_pose_detection_confidence=min_confidence,
         min_pose_presence_confidence=min_confidence,
@@ -78,74 +50,164 @@ def create_pose_landmarker(
 #
 # @param image_array The (H, W, 3) RGB image to search
 # @param landmarker A pose landmarker, created by create_pose_landmarker()
-# @returns The (x, y) coordinates of the head's centre in pixels
+
+# @returns The (x, y) coordinates of the head's centre the padded box around the whole person as (left, top, right, bottom)
 # @raises ValueError If there is not exactly one person in the image
-def locate_head_centre(image_array: np.ndarray, landmarker) -> tuple[float, float]:
-    import mediapipe as mp
+def calculate_head_coords(image_array: np.ndarray, landmarker
+                          ) -> tuple[tuple[float, float], tuple[float, float, float, float]]:
     image_h, image_w = image_array.shape[:2]
+
+    import mediapipe as mp
+
+    # Mediapipe gets the pose landmarks
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_array)
-    poses = landmarker.detect(mp_image).pose_landmarks
 
-    if len(poses) != 1:
-        raise ValueError(f"Expected exactly 1 person, found {len(poses)}")
+    # Detect poses using media pipe on the image
+    detection_result = landmarker.detect(mp_image)
 
-    head = [poses[0][i] for i in HEAD_LANDMARK_INDICES]
+    # List of detected pose landmark sets
+    detected_poses = detection_result.pose_landmarks
 
-    # Landmarks are normalised to [0, 1] but can fall slightly outside the image, so clamp
-    xs: list[float] = [(lm.x or 0.0) * image_w for lm in head]
-    ys: list[float] = [(lm.y or 0.0) * image_h for lm in head]
+    # Total count of detected poses
+    num_poses = len(detected_poses)
 
-    left, top = max(min(xs), 0.0), max(min(ys), 0.0)
-    right, bottom = min(max(xs), float(image_w)), min(max(ys), float(image_h))
+    # Exactly one person must be present
+    if num_poses != 1:
+        # Raise error if 0 or multiple people are detected
+        raise ValueError(f"Expected exactly 1 person, found {num_poses}")
 
-    return (left + right) / 2.0, (top + bottom) / 2.0
+    # Unpack the single pose list directly out of the 1-element detected_poses list
+    [pose] = detected_poses
+
+    # Slice the first 11 landmarks corresponding to facial features (indices 0-10)
+    head_landmarks = pose[:11]
+
+    # Convert normalized X coordinates (0.0 to 1.0) into absolute pixel coordinates
+    landmark_x_coords: list[float] = [(lm.x or 0.0) * image_w for lm in head_landmarks]
+
+    # Convert normalized Y coordinates (0.0 to 1.0) into absolute pixel coordinates
+    landmark_y_coords: list[float] = [(lm.y or 0.0) * image_h for lm in head_landmarks]
+
+    # Find max and min landmark coords
+    box_left = min(landmark_x_coords)
+    box_right = max(landmark_x_coords)
+    box_top = min(landmark_y_coords)
+    box_bottom = max(landmark_y_coords)
+
+    # Return the centre coords
+    x_center = (box_left + box_right) / 2.0
+    y_center = (box_top + box_bottom) / 2.0
 
 
-## @brief Calculates the target frame for the output image
+    # Below is to deal with reflecting the person
+
+    # Box around every landmark (not just the head) so the whole body is covered
+    body_x_coords = [(lm.x or 0.0) * image_w for lm in pose]
+    body_y_coords = [(lm.y or 0.0) * image_h for lm in pose]
+
+    # Add padding of 10% to the landmarks, since landmarks sit inside the body and miss hair, shoulders and clothing
+    person_box_padding = 0.1
+
+    # Horizontal and vertical padding, scaled by the width and height of the landmarks
+    pad_x = (max(body_x_coords) - min(body_x_coords)) * person_box_padding
+    pad_y = (max(body_y_coords) - min(body_y_coords)) * person_box_padding
+
+    # Using the padding and the landmark coords create a padded box around the person to use for reflection validation
+    person_box = (
+        min(body_x_coords) - pad_x,
+        min(body_y_coords) - pad_y,
+        max(body_x_coords) + pad_x,
+        max(body_y_coords) + pad_y,
+    )
+    return (x_center, y_center), person_box
+
+
+## @brief Calculates the new image frame for the portrait's head to be centred
 #
-# The frame keeps the original aspect ratio and its bottom edge always sits on the
-# bottom of the original image, so the frame only ever extends above and beside it.
+# The frame keeps the original aspect ratio and the new frames bottom edge always sits on the
+# bottom of the original image, so the frame only ever extends above and beside it to accommodate original head position
 #
-# @param image_size The (width, height) of the original photo in pixels
-# @param head_centre The (x, y) of the head centre in pixels
+# @param image_size The (width, height) of the original photo
+# @param head_centre The (x, y) of the head centre
 # @param head_x Horizontal head placement as a fraction of output width
-# @param head_y Vertical head placement as a fraction of output height from bottom
-# @returns The target frame as (left, top, width, height) in original image coordinates
-# @raises ValueError If the head is too close to the bottom to frame without padding underneath
-def compute_target_frame(
+# @param head_y Vertical head placement as a fraction of output height
+#
+# @returns The new image frame as (left, top, width, height) following rectangle convention of (x, y, w, h)
+def compute_new_img_frame(
         image_size: tuple[int, int],
         head_centre: tuple[float, float],
         head_x: float,
         head_y: float
 ) -> tuple[int, int, int, int]:
+
+    # width and height of the image provided
     image_w, image_h = image_size
+
+    # the centre points of the head of the person in the image
     centre_x, centre_y = head_centre
 
-    frame_h = (image_h - centre_y) / head_y
-    frame_w = frame_h * image_w / image_h
+    # calculate the vertical space between the bottom of the image and the head
+    dist_between_bottom_and_head = image_h - centre_y
 
-    if min(frame_w, frame_h) < 1:
-        raise ValueError("Head is too close to bottom to place at this height without padding underneath.")
+    # dist_between_bottom_and_head = head_y * frame_h
+    # this formula means that head position should be head_y% up the new frame
+    # we have the distance and head_y fraction so we can calculate the height of the new frame with substitution
+    frame_h = round(dist_between_bottom_and_head / head_y)
 
-    frame_left = round(centre_x - head_x * frame_w)
-    frame_h = round(frame_h)
+    # image aspect ratio to keep
+    img_ratio = image_w / image_h
 
-    return frame_left, image_h - frame_h, round(frame_w), frame_h
+    # scale width by the images aspect ratio
+    frame_w = round(frame_h * img_ratio)
+
+    # Distance from the frame's left edge to the head's centre
+    # The head should sit head_x% of the way across the frame
+    head_offset_x = head_x * frame_w
+
+    # The head's centre is at centre_x in the original image, so the frame's left
+    # edge is head_offset_x pixels to the left of it. This can be negative, which
+    # means the frame pokes out past the left edge and needs padding.
+    frame_left = round(centre_x - head_offset_x)
+
+    # Gets the difference between the top of the original image and the new frame
+    # This can be negative when the frame is taller than the image, which means it needs padding above.
+    frame_top = image_h - frame_h
+
+    # Standard rectangle convention for the new image frame (x, y, w, h)
+    return frame_left, frame_top, frame_w, frame_h
 
 
 ## @brief Extends the background with reflection padding and crops to the target frame
 #
 # @param image_array An (H, W, 3) array of the original photo
-# @param frame The target frame as (left, top, width, height) in original image coordinates
-# @returns The final framed RGB image
-def reframe(image_array: np.ndarray, frame: tuple[int, int, int, int]) -> Image.Image:
-    image_h, image_w = image_array.shape[:2]
-    frame_left, frame_top, frame_w, frame_h = frame
+# @param frame The new frame to extend the image array to fit
+# @param person_box The padded box around the person as (left, top, right, bottom)
 
-    # Only pad where the frame pokes outside the image (never at the bottom)
+# @returns RGB image which has the head aligned
+def extend_and_crop(
+        image_array: np.ndarray,
+        frame: tuple[int, int, int, int],
+        person_box: tuple[float, float, float, float]
+) -> Image.Image:
+
+    image_h, image_w = image_array.shape[:2]
+
+    frame_left, frame_top, frame_w, frame_h = frame
+    person_left, person_top, person_right, person_bottom = person_box
+
+    # Only add padding where the frame pokes outside the image (never at the bottom)
     pad_top = max(0, -frame_top)
     pad_left = max(0, -frame_left)
     pad_right = max(0, frame_left + frame_w - image_w)
+
+    # Reflection copies the part of the photo next to each padded edge, flipped, into the new area.
+    # If the person is inside that part of the photo, a mirrored copy of them would appear, so raise an error.
+    if pad_top > 0 and person_top < pad_top:
+        raise ValueError("Cannot extend the top: the reflection would mirror the person")
+    if pad_left > 0 and person_left < pad_left:
+        raise ValueError("Cannot extend the left: the reflection would mirror the person")
+    if pad_right > 0 and person_right > image_w - pad_right:
+        raise ValueError("Cannot extend the right: the reflection would mirror the person")
 
     padded_array = np.pad(
         image_array,
@@ -175,27 +237,22 @@ def process(image: Image.Image, settings: HeadAlignmentSettings) -> Image.Image:
     head_x = settings.head_x
     head_y = settings.head_y
 
-    # FIX: Shave 2 pixels off the perimeter to destroy any edge artifacts (like a microscopic
-    # white border or sharpening halo) before it gets mathematically reflected.
+    # Shave 2 pixels off the perimeter to destroy any edge artifacts before the img gets reflected.
     width, height = image.size
     image = image.crop((2, 2, width - 2, height - 2))
 
-    # TODO: dont create this every image
-    landmarker = get_landmarker()
+    # TODO: Create the pose landmarker once and pass it in, instead of creating a new one every time process is called
+    landmarker = create_pose_landmarker()
 
     image_array = np.asarray(image.convert("RGB"))
 
     # Extract width and height straight from the array shape (H, W, Channels)
     image_size = (image_array.shape[1], image_array.shape[0])
 
-    head_centre = locate_head_centre(image_array, landmarker)
-    frame = compute_target_frame(image_size, head_centre, head_x, head_y)
+    head_coords, person_box = calculate_head_coords(image_array, landmarker)
 
-    return reframe(image_array, frame)
+    frame = compute_new_img_frame(image_size, head_coords, head_x, head_y)
 
-## @brief Returns a singleton pose landmarker, creating it if necessary
-def get_landmarker():
-    global _landmarker
-    if _landmarker is None:
-        _landmarker = create_pose_landmarker()
-    return _landmarker
+    aligned_img = extend_and_crop(image_array, frame, person_box)
+
+    return aligned_img

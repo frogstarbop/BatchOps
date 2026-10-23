@@ -5,11 +5,9 @@ import numpy as np
 import PIL.Image
 import PIL.ImageFilter
 
-from rembg.sessions.base import BaseSession
-
-
 if TYPE_CHECKING:
     from rembg.sessions.base import BaseSession
+
 ## @brief A container for all the settings for replacing an image's background
 @dataclass
 class BackgroundSettings:
@@ -19,7 +17,7 @@ class BackgroundSettings:
     background_rgb: tuple[int, int, int]
 
     ## A key of SHADOW_PRESETS: soft, natural, deep or dramatic
-    intensity: str 
+    intensity: str
 
     ## The brightness treated as unshaded, estimated from the photo if None
     white_pt: float | None
@@ -56,6 +54,71 @@ SHADOW_PRESETS = {
     "dramatic": (0.04, 0.60),  # High-contrast contact shadows for textured outdoor floors
 }
 DEFAULT_INTENSITY = "natural"
+
+# --- Hardware acceleration: ONNX Runtime execution providers ---
+
+# Needs: pip install onnxruntime-directml  (any GPU on Windows)
+DML_PROVIDER = "DmlExecutionProvider"
+DML_DEVICE_ID = 0  # Which GPU DirectML uses; default is 0
+
+# Plain ONNX Runtime CPU provider, always available
+CPU_PROVIDER = "CPUExecutionProvider"
+
+
+## @brief Checks whether a session is running on a GPU provider or CPU provider
+#
+# @param session A rembg session
+# @returns True if the first active provider is not the CPU provider
+def runs_on_gpu(session: BaseSession) -> bool:
+    return session.inner_session.get_providers()[0] != CPU_PROVIDER
+
+## @brief Builds the provider priority list for the requested hardware
+#
+# @param hardware "gpu" or "cpu"
+# @returns A list of provider names or (name, options) tuples, in priority order
+def select_providers(hardware: str) -> list:
+    import onnxruntime
+
+    if hardware not in ("gpu", "cpu"):
+        raise ValueError(f"device must be 'gpu' or 'cpu', got {hardware!r}")
+
+    available = onnxruntime.get_available_providers()
+
+    # get the provider
+    providers = []
+    if hardware == "gpu":
+        if DML_PROVIDER in available:
+            providers.append(
+                (DML_PROVIDER, {"device_id": DML_DEVICE_ID, "arena_extend_strategy": "kSameAsRequested"})
+            )
+        else:
+            print("DirectML provider not available, falling back to CPU")
+
+    providers.append(CPU_PROVIDER)
+    return providers
+
+## @brief Creates a rembg session that runs on the requested device
+#
+# Create this once and pass it to process() for every image, since loading the model is slow
+# and uses a lot of memory.
+#
+# @param model_name The rembg model to load
+# @param hardware "gpu" or "cpu"; falls back to the best available option if the preferred one isn't installed
+# @returns A rembg session using the providers from _select_providers
+def create_session(model_name: str, hardware: str) -> BaseSession:
+    import onnxruntime
+    import rembg
+
+    providers = select_providers(hardware)
+    print(f"Using providers: {providers}")
+
+    # Memory-saving options
+    sess_opts = onnxruntime.SessionOptions()
+    sess_opts.enable_mem_pattern = False  # don't pre-plan and hold one big block of memory
+    sess_opts.enable_cpu_mem_arena = False  # give CPU memory back instead of caching it
+
+    rembg_session = rembg.new_session(model_name, sess_opts=sess_opts, providers=providers)
+    return rembg_session
 
 
 ## @brief Checks that a background colour is three values from 0-255
@@ -195,15 +258,37 @@ def estimate_white_point(luminance: np.ndarray, mask: np.ndarray) -> float:
 # @returns An (H, W) float mask where 1.0 is subject and 0.0 is background
 # @raises TypeError If session is not a rembg session, since rembg would silently load a default model
 #                   for None and fail confusingly for anything else (such as a model name)
-def extract_mask(image: PIL.Image.Image, session: BaseSession) -> np.ndarray:
+def extract_mask(image: PIL.Image.Image, session: BaseSession, settings: BackgroundSettings) -> np.ndarray:
     import rembg
     from rembg.sessions.base import BaseSession
+
     if not isinstance(session, BaseSession):
         raise TypeError(
             f"session must be created with rembg.new_session(<model name>), got {type(session).__name__}"
         )
 
-    mask_image = rembg.remove(image, session=session, only_mask=True)
+    # try get the mask with the session
+    try:
+        mask_image = rembg.remove(
+            image,
+            session=session,
+            only_mask=True
+        )
+    except Exception as e:
+        # If we were already on CPU, fail immediately with a specific message
+        if not runs_on_gpu(session):
+            raise RuntimeError(f"Failed to run on CPU: {e}") from e
+
+        # Otherwise fallback to using CPU
+        print(f"GPU inference failed during mask extraction ({e}). Retrying with CPU...")
+        cpu_session = create_session(settings.model_name, "cpu")
+
+        # Catch errors during the fallback attempt
+        try:
+            mask_image = rembg.remove(image, session=cpu_session, only_mask=True)
+        except Exception as cpu_e:
+            raise RuntimeError(f"Failed to run on CPU during fallback attempt: {cpu_e}") from cpu_e
+
     return np.array(mask_image, dtype=np.float32) / MAX_PIXEL_VALUE
 
 
@@ -254,20 +339,20 @@ def composite(
 # @raises ValueError If the colour is invalid, the image has transparency, intensity is unknown,
 #                    or white_pt cannot be estimated or is not above the preset's black point
 #                    and at most 1.0
-# @raises TypeError If session is not a rembg session
-def process(image: PIL.Image.Image, settings: BackgroundSettings) -> PIL.Image.Image:
-    import rembg
+def process(image: PIL.Image.Image,
+            settings: BackgroundSettings,
+            ) -> PIL.Image.Image:
+
+    # TODO: Create the session once and pass it in, instead of creating a new one every time process is called
+    session = create_session(settings.model_name, "gpu")
+
     background_rgb: tuple[int, int, int] = settings.background_rgb
     intensity: str = settings.intensity
     white_pt: float | None = settings.white_pt
 
-    # the preset editor can't store None, so 0 (or less) also means estimate it from the photo
+    # The preset editor can't store None, so 0 (or less) means estimate from photo
     if white_pt is not None and white_pt <= 0:
         white_pt = None
-    # TODO: use model field in settings
-
-    # TODO: initialize session only once during processing instead of per-image
-    session: BaseSession = rembg.new_session()
 
     validate_rgb(background_rgb)
     validate_opaque(image)
@@ -276,7 +361,7 @@ def process(image: PIL.Image.Image, settings: BackgroundSettings) -> PIL.Image.I
 
     rgb_image = image.convert("RGB")
     fg_srgb = image_to_array(rgb_image)
-    mask = extract_mask(rgb_image, session)
+    mask = extract_mask(rgb_image, session, settings)
 
     luminance = to_luminance(fg_srgb)
     if white_pt is None:
